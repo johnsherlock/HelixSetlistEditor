@@ -1,0 +1,33 @@
+{
+  "name": "helix-setlist-editor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "npm run build:server && npm run build:web",
+    "build:server": "tsc -p tsconfig.build.json",
+    "build:web": "vite build",
+    "dev:web": "vite",
+    "preview:web": "vite preview",
+    "typecheck": "npm run typecheck:server && npm run typecheck:web",
+    "typecheck:server": "tsc --noEmit",
+    "typecheck:web": "tsc -p tsconfig.web.json --noEmit",
+    "start": "node dist/server/index.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fastify/static": "^8.2.0",
+    "fastify": "^5.6.1",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "@types/react": "^19.1.13",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.2",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.5",
+    "vitest": "^3.2.4"
+  }
+}

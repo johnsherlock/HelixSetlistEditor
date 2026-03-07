@@ -1,0 +1,563 @@
+import { useEffect, useMemo, useState } from "react";
+
+import { fetchPresets, fetchSetlists, loadSetlist, saveSetlist } from "./api";
+import type { LibraryEntry, SetlistDraft } from "./types";
+
+const DEFAULT_HOME_DIR = "/Users/john/Documents/Line 6/Tones/Helix";
+const PRESET_SLOTS = 128;
+const LOCAL_STORAGE_HOME_KEY = "helix-setlist-home-dir";
+
+type PendingAction =
+  | { kind: "switch-setlist"; relativePath: string }
+  | { kind: "new-draft" }
+  | null;
+
+type SaveAsReason = "manual" | "switch";
+
+function createSlotLabels(): string[] {
+  const labels = ["A", "B", "C", "D"];
+  const result: string[] = [];
+
+  for (let bank = 1; bank <= 32; bank += 1) {
+    for (const label of labels) {
+      result.push(`${bank}${label}`);
+    }
+  }
+
+  return result;
+}
+
+function cloneDraft(draft: SetlistDraft): SetlistDraft {
+  return structuredClone(draft);
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+}
+
+function getSetlistName(draft: SetlistDraft | null): string {
+  if (!draft) {
+    return "No Setlist Loaded";
+  }
+
+  const innerMeta = asRecord(asRecord(draft.innerJson).meta);
+
+  if (typeof innerMeta.name === "string" && innerMeta.name.trim()) {
+    return innerMeta.name;
+  }
+
+  const outerMeta = asRecord(draft.outerTemplate.meta);
+
+  if (typeof outerMeta.name === "string" && outerMeta.name.trim()) {
+    return outerMeta.name;
+  }
+
+  return draft.sourcePath?.replace(/\.hls$/i, "") ?? "Untitled Setlist";
+}
+
+function setSetlistName(draft: SetlistDraft, name: string): SetlistDraft {
+  const nextDraft = cloneDraft(draft);
+  const innerJson = asRecord(nextDraft.innerJson);
+  const innerMeta = asRecord(innerJson.meta);
+  const outerMeta = asRecord(nextDraft.outerTemplate.meta);
+
+  innerMeta.name = name;
+  outerMeta.name = name;
+  innerJson.meta = innerMeta;
+  nextDraft.innerJson = innerJson;
+  nextDraft.outerTemplate.meta = outerMeta;
+
+  return nextDraft;
+}
+
+function getPresetNames(draft: SetlistDraft | null): string[] {
+  if (!draft) {
+    return Array.from({ length: PRESET_SLOTS }, () => "");
+  }
+
+  const innerJson = asRecord(draft.innerJson);
+  const presets = Array.isArray(innerJson.presets) ? innerJson.presets : [];
+  const names = presets.slice(0, PRESET_SLOTS).map((preset) => {
+    const presetMeta = asRecord(asRecord(preset).meta);
+    return typeof presetMeta.name === "string" ? presetMeta.name : "";
+  });
+
+  while (names.length < PRESET_SLOTS) {
+    names.push("");
+  }
+
+  return names;
+}
+
+async function saveDraft(args: {
+  homeDir: string;
+  relativePath: string;
+  draft: SetlistDraft;
+  overwrite: boolean;
+}): Promise<void> {
+  await saveSetlist({
+    homeDir: args.homeDir,
+    relativePath: args.relativePath,
+    draft: args.draft,
+    overwrite: args.overwrite,
+  });
+}
+
+export function App() {
+  const [homeDir, setHomeDir] = useState(() => localStorage.getItem(LOCAL_STORAGE_HOME_KEY) ?? DEFAULT_HOME_DIR);
+  const [setlists, setSetlists] = useState<LibraryEntry[]>([]);
+  const [presets, setPresets] = useState<LibraryEntry[]>([]);
+  const [presetFilter, setPresetFilter] = useState("");
+  const [activePath, setActivePath] = useState<string | null>(null);
+  const [draft, setDraft] = useState<SetlistDraft | null>(null);
+  const [dirty, setDirty] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingAction>(null);
+  const [showUnsavedModal, setShowUnsavedModal] = useState(false);
+  const [showSaveAsModal, setShowSaveAsModal] = useState(false);
+  const [saveAsReason, setSaveAsReason] = useState<SaveAsReason>("manual");
+  const [saveAsInput, setSaveAsInput] = useState("");
+
+  const filteredPresets = useMemo(() => {
+    const query = presetFilter.trim().toLowerCase();
+
+    if (!query) {
+      return presets;
+    }
+
+    return presets.filter((preset) => preset.name.toLowerCase().includes(query));
+  }, [presetFilter, presets]);
+
+  const slotLabels = useMemo(() => createSlotLabels(), []);
+  const presetNames = useMemo(() => getPresetNames(draft), [draft]);
+  const title = `${getSetlistName(draft)}${dirty ? " *" : ""}`;
+  const unsavedPromptText =
+    pendingAction?.kind === "new-draft"
+      ? "Save, save as a copy, or discard edits before creating a new setlist draft."
+      : "Save, save as a copy, or discard edits before loading another setlist.";
+
+  useEffect(() => {
+    localStorage.setItem(LOCAL_STORAGE_HOME_KEY, homeDir);
+  }, [homeDir]);
+
+  useEffect(() => {
+    document.title = title;
+  }, [title]);
+
+  useEffect(() => {
+    void refreshLibrary(true);
+  }, []);
+
+  async function refreshLibrary(autoSelectFirst: boolean): Promise<void> {
+    setLoading(true);
+    setErrorMessage(null);
+
+    try {
+      const [nextSetlists, nextPresets] = await Promise.all([fetchSetlists(homeDir), fetchPresets(homeDir)]);
+
+      setSetlists(nextSetlists);
+      setPresets(nextPresets);
+
+      if (!activePath && autoSelectFirst && nextSetlists[0]) {
+        await loadIntoEditor(nextSetlists[0].relativePath);
+      } else if (activePath && !nextSetlists.some((entry) => entry.relativePath === activePath)) {
+        setActivePath(null);
+        setDraft(null);
+        setDirty(false);
+      }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to load Helix library.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadIntoEditor(relativePath: string): Promise<void> {
+    setLoading(true);
+    setErrorMessage(null);
+
+    try {
+      const response = await loadSetlist(homeDir, relativePath);
+      setDraft(cloneDraft(response.draft));
+      setActivePath(relativePath);
+      setDirty(false);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to load the selected setlist.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleSelectSetlist(relativePath: string): void {
+    if (relativePath === activePath) {
+      return;
+    }
+
+    if (dirty) {
+      setPendingAction({ kind: "switch-setlist", relativePath });
+      setShowUnsavedModal(true);
+      return;
+    }
+
+    void loadIntoEditor(relativePath);
+  }
+
+  function handleNameChange(name: string): void {
+    if (!draft) {
+      return;
+    }
+
+    setDraft(setSetlistName(draft, name));
+    setDirty(true);
+  }
+
+  async function handleSave(): Promise<boolean> {
+    if (!draft || !activePath) {
+      return false;
+    }
+
+    if (!window.confirm(`Overwrite ${activePath}?`)) {
+      return false;
+    }
+
+    setSaving(true);
+    setErrorMessage(null);
+
+    try {
+      await saveDraft({
+        homeDir,
+        relativePath: activePath,
+        draft,
+        overwrite: true,
+      });
+      setDirty(false);
+      await refreshLibrary(false);
+      return true;
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to save the active setlist.");
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function beginSaveAs(reason: SaveAsReason): void {
+    const baseName = activePath?.replace(/\.hls$/i, "") || getSetlistName(draft).trim() || "Untitled Setlist";
+
+    setSaveAsReason(reason);
+    setSaveAsInput(`${baseName} Copy.hls`);
+    if (reason === "switch") {
+      setShowUnsavedModal(false);
+    }
+    setShowSaveAsModal(true);
+  }
+
+  async function handleSaveAsConfirm(): Promise<void> {
+    if (!draft) {
+      return;
+    }
+
+    const trimmed = saveAsInput.trim();
+
+    if (!trimmed) {
+      setErrorMessage("Save as copy requires a file name.");
+      return;
+    }
+
+    const relativePath = trimmed.toLowerCase().endsWith(".hls") ? trimmed : `${trimmed}.hls`;
+
+    setSaving(true);
+    setErrorMessage(null);
+
+    try {
+      await saveDraft({
+        homeDir,
+        relativePath,
+        draft,
+        overwrite: false,
+      });
+
+      setShowSaveAsModal(false);
+      setActivePath(relativePath);
+      setDraft({
+        ...cloneDraft(draft),
+        sourcePath: relativePath,
+      });
+      setDirty(false);
+      await refreshLibrary(false);
+
+      if (saveAsReason === "switch") {
+        await continuePendingActionAfterSave();
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to save a copy.";
+
+      if (message.includes("Refusing to overwrite existing file")) {
+        if (!window.confirm(`${relativePath} already exists. Replace it?`)) {
+          setSaving(false);
+          if (saveAsReason === "switch") {
+            setShowUnsavedModal(true);
+          }
+          return;
+        }
+
+        try {
+          await saveDraft({
+            homeDir,
+            relativePath,
+            draft,
+            overwrite: true,
+          });
+
+          setShowSaveAsModal(false);
+          setActivePath(relativePath);
+          setDraft({
+            ...cloneDraft(draft),
+            sourcePath: relativePath,
+          });
+          setDirty(false);
+          await refreshLibrary(false);
+
+          if (saveAsReason === "switch") {
+            await continuePendingActionAfterSave();
+          }
+        } catch (overwriteError) {
+          setErrorMessage(overwriteError instanceof Error ? overwriteError.message : "Failed to replace setlist copy.");
+        }
+      } else {
+        setErrorMessage(message);
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function continuePendingActionAfterSave(): Promise<void> {
+    if (!pendingAction) {
+      return;
+    }
+
+    const action = pendingAction;
+    setPendingAction(null);
+    setShowUnsavedModal(false);
+
+    if (action.kind === "switch-setlist") {
+      await loadIntoEditor(action.relativePath);
+      return;
+    }
+
+    setErrorMessage("New setlist creation is blocked until blank preset template semantics are defined.");
+  }
+
+  function handleDiscardAndContinue(): void {
+    const action = pendingAction;
+    setPendingAction(null);
+    setShowUnsavedModal(false);
+
+    if (!action) {
+      return;
+    }
+
+    if (action.kind === "switch-setlist") {
+      void loadIntoEditor(action.relativePath);
+      return;
+    }
+
+    setErrorMessage("New setlist creation is blocked until blank preset template semantics are defined.");
+  }
+
+  function handleNew(): void {
+    if (dirty) {
+      setPendingAction({ kind: "new-draft" });
+      setShowUnsavedModal(true);
+      return;
+    }
+
+    setErrorMessage("New setlist creation is blocked until blank preset template semantics are defined.");
+  }
+
+  return (
+    <div className="shell">
+      <aside className="sidebar">
+        <div className="panel">
+          <label className="field-label" htmlFor="home-dir">
+            Home Directory
+          </label>
+          <div className="home-dir-row">
+            <input
+              id="home-dir"
+              className="text-input"
+              value={homeDir}
+              onChange={(event) => setHomeDir(event.target.value)}
+              placeholder="/Users/john/Documents/Line 6/Tones/Helix"
+            />
+            <button className="ghost-button" onClick={() => void refreshLibrary(true)} disabled={loading}>
+              Load
+            </button>
+          </div>
+        </div>
+
+        <section className="panel list-panel">
+          <div className="panel-header">
+            <h2>Setlists</h2>
+            <span>{setlists.length}</span>
+          </div>
+          <div className="scroll-region">
+            {setlists.map((entry) => (
+              <button
+                key={entry.relativePath}
+                className={`list-row ${entry.relativePath === activePath ? "active" : ""}`}
+                onClick={() => handleSelectSetlist(entry.relativePath)}
+              >
+                <span>{entry.name}</span>
+                {dirty && entry.relativePath === activePath ? <strong>*</strong> : null}
+              </button>
+            ))}
+            {!setlists.length ? <p className="empty-state">No setlists found in /Setlists.</p> : null}
+          </div>
+        </section>
+
+        <section className="panel list-panel">
+          <div className="panel-header">
+            <h2>Presets</h2>
+            <span>{filteredPresets.length}</span>
+          </div>
+          <input
+            className="text-input filter-input"
+            value={presetFilter}
+            onChange={(event) => setPresetFilter(event.target.value)}
+            placeholder="Filter presets"
+          />
+          <div className="scroll-region">
+            {filteredPresets.map((entry) => (
+              <div key={entry.relativePath} className="preset-row">
+                <span>{entry.name}</span>
+              </div>
+            ))}
+            {!filteredPresets.length ? <p className="empty-state">No presets match the current filter.</p> : null}
+          </div>
+        </section>
+      </aside>
+
+      <main className="workspace">
+        <header className="hero">
+          <div>
+            <p className="eyebrow">Local library shell</p>
+            <h1>Helix Setlist Editor</h1>
+          </div>
+          <div className="action-row">
+            <button className="ghost-button" onClick={handleNew} disabled={saving}>
+              New
+            </button>
+            <button className="ghost-button" onClick={() => void handleSave()} disabled={!draft || saving}>
+              Save
+            </button>
+            <button className="ghost-button" onClick={() => beginSaveAs("manual")} disabled={!draft || saving}>
+              Save as Copy
+            </button>
+          </div>
+        </header>
+
+        {errorMessage ? <div className="error-banner">{errorMessage}</div> : null}
+
+        <section className="editor-panel">
+          <div className="title-row">
+            <input
+              className="title-input"
+              value={getSetlistName(draft)}
+              onChange={(event) => handleNameChange(event.target.value)}
+              disabled={!draft}
+              placeholder="Setlist name"
+            />
+            <span className="dirty-indicator">{dirty ? "*" : ""}</span>
+          </div>
+
+          <div className="status-row">
+            <span>{activePath ?? "No file selected"}</span>
+            <span>{loading ? "Loading..." : `${presetNames.filter(Boolean).length} named presets`}</span>
+          </div>
+
+          <div className="setlist-grid">
+            {presetNames.map((name, index) => (
+              <div key={slotLabels[index]} className="setlist-row">
+                <span className="slot-label">{slotLabels[index]}</span>
+                <span className={`preset-name ${name ? "" : "blank"}`}>{name || "<empty>"}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      </main>
+
+      {showUnsavedModal ? (
+        <div className="modal-backdrop">
+          <div className="modal-card">
+            <h3>Unsaved changes</h3>
+            <p>{unsavedPromptText}</p>
+            <div className="modal-actions">
+              <button
+                className="solid-button"
+                onClick={() => {
+                  void handleSave().then((saved) => {
+                    if (saved) {
+                      void continuePendingActionAfterSave();
+                    }
+                  });
+                }}
+              >
+                Save
+              </button>
+              <button className="ghost-button" onClick={() => beginSaveAs("switch")}>
+                Save as Copy
+              </button>
+              <button className="ghost-button" onClick={handleDiscardAndContinue}>
+                Discard
+              </button>
+              <button
+                className="ghost-button"
+                onClick={() => {
+                  setShowUnsavedModal(false);
+                  setPendingAction(null);
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showSaveAsModal ? (
+        <div className="modal-backdrop">
+          <div className="modal-card">
+            <h3>Save setlist copy</h3>
+            <p>Choose a file name for the copied setlist.</p>
+            <input
+              className="text-input"
+              value={saveAsInput}
+              onChange={(event) => setSaveAsInput(event.target.value)}
+              autoFocus
+            />
+            <div className="modal-actions">
+              <button className="solid-button" onClick={() => void handleSaveAsConfirm()}>
+                Save copy
+              </button>
+              <button
+                className="ghost-button"
+                onClick={() => {
+                  setShowSaveAsModal(false);
+                  if (saveAsReason === "switch") {
+                    setShowUnsavedModal(true);
+                  }
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
