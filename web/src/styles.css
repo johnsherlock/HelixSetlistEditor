@@ -16,6 +16,11 @@
   box-sizing: border-box;
 }
 
+html,
+body {
+  height: 100%;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -25,6 +30,7 @@ body {
     radial-gradient(circle at top left, rgba(217, 106, 65, 0.18), transparent 28%),
     radial-gradient(circle at right, rgba(139, 222, 195, 0.14), transparent 32%),
     linear-gradient(180deg, #171d22 0%, #101317 52%, #0c0f12 100%);
+  overflow: hidden;
 }
 
 button,
@@ -33,21 +39,25 @@ input {
 }
 
 #root {
+  height: 100%;
   min-height: 100vh;
+  overflow: hidden;
 }
 
 .shell {
-  min-height: 100vh;
+  height: 100vh;
   display: grid;
   grid-template-columns: 320px 1fr;
   gap: 24px;
   padding: 24px;
   animation: shell-in 280ms ease-out;
+  overflow: hidden;
 }
 
 .sidebar,
 .workspace {
   min-height: 0;
+  overflow: hidden;
 }
 
 .sidebar {
@@ -68,6 +78,7 @@ input {
 .panel,
 .editor-panel {
   border-radius: 22px;
+  overflow: hidden;
 }
 
 .panel {
@@ -121,7 +132,7 @@ input {
 
 .hero {
   border-radius: 28px;
-  padding: 24px 28px;
+  padding: 20px 24px;
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
@@ -130,7 +141,7 @@ input {
 
 .hero h1 {
   font-family: "Baskerville", "Times New Roman", serif;
-  font-size: clamp(2.1rem, 5vw, 4.3rem);
+  font-size: clamp(1.8rem, 4vw, 3.4rem);
   line-height: 0.94;
   letter-spacing: 0.02em;
   text-transform: uppercase;
@@ -145,8 +156,8 @@ input {
 .editor-panel {
   display: grid;
   grid-template-rows: auto auto 1fr;
-  gap: 14px;
-  padding: 22px;
+  gap: 12px;
+  padding: 18px;
   min-height: 0;
 }
 
@@ -215,6 +226,7 @@ input {
 .setlist-grid {
   overflow: auto;
   min-height: 0;
+  overscroll-behavior: contain;
 }
 
 .list-row,
@@ -259,18 +271,18 @@ input {
 
 .setlist-grid {
   display: grid;
-  gap: 10px;
+  gap: 4px;
   align-content: start;
   padding-right: 4px;
 }
 
 .setlist-slot {
   display: grid;
-  gap: 8px;
+  gap: 3px;
 }
 
 .drop-gap {
-  min-height: 10px;
+  min-height: 4px;
   border-radius: 999px;
   border: 1px dashed transparent;
   background: transparent;
@@ -284,8 +296,12 @@ input {
   transition: min-height 120ms ease, border-color 120ms ease, background 120ms ease, color 120ms ease;
 }
 
+.drop-gap.visible {
+  min-height: 6px;
+}
+
 .drop-gap.active {
-  min-height: 32px;
+  min-height: 16px;
   border-color: rgba(139, 222, 195, 0.65);
   background: rgba(139, 222, 195, 0.14);
   color: var(--accent);
@@ -293,13 +309,18 @@ input {
 
 .setlist-row {
   display: grid;
-  grid-template-columns: 72px 1fr;
-  gap: 14px;
+  grid-template-columns: 62px 1fr auto;
+  gap: 10px;
   align-items: center;
-  padding: 13px 16px;
-  border-radius: 16px;
+  padding: 9px 12px;
+  border-radius: 14px;
   background: rgba(12, 15, 18, 0.64);
   border: 1px solid rgba(246, 243, 234, 0.08);
+  cursor: grab;
+}
+
+.setlist-row.dragging {
+  opacity: 0.45;
 }
 
 .slot-label {
@@ -311,6 +332,21 @@ input {
 
 .preset-name.blank {
   color: #71807b;
+}
+
+.remove-button {
+  border: 1px solid rgba(246, 243, 234, 0.1);
+  background: rgba(12, 15, 18, 0.88);
+  color: var(--muted);
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.remove-button:hover {
+  border-color: rgba(241, 138, 122, 0.3);
+  color: #ffd7d1;
 }
 
 .error-banner {

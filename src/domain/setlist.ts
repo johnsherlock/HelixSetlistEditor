@@ -26,6 +26,10 @@ function clone<T>(value: T): T {
   return structuredClone(value);
 }
 
+function createBlankPreset(): Record<string, unknown> {
+  return {};
+}
+
 function getPresetsArray(draft: SetlistDraftLike): unknown[] {
   const innerJson = asRecord(draft.innerJson);
   return Array.isArray(innerJson.presets) ? [...innerJson.presets] : [];
@@ -60,6 +64,41 @@ export function getPresetNames(draft: SetlistDraftLike | null): string[] {
   return names;
 }
 
+export function movePresetWithinSetlistDraft(
+  draft: SetlistDraftLike,
+  fromIndex: number,
+  insertIndex: number,
+): SetlistDraftLike {
+  const presets = getPresetsArray(draft);
+  const normalizedFrom = Math.max(0, Math.min(fromIndex, PRESET_SLOT_COUNT - 1));
+  const normalizedInsert = Math.max(0, Math.min(insertIndex, PRESET_SLOT_COUNT));
+
+  while (presets.length < PRESET_SLOT_COUNT) {
+    presets.push(createBlankPreset());
+  }
+
+  const [movedPreset] = presets.splice(normalizedFrom, 1);
+  const normalizedTarget = normalizedFrom < normalizedInsert ? normalizedInsert - 1 : normalizedInsert;
+
+  presets.splice(normalizedTarget, 0, movedPreset ?? createBlankPreset());
+
+  return setPresetsArray(draft, presets.slice(0, PRESET_SLOT_COUNT));
+}
+
+export function removePresetFromSetlistDraft(draft: SetlistDraftLike, removeIndex: number): SetlistDraftLike {
+  const presets = getPresetsArray(draft);
+  const normalizedRemove = Math.max(0, Math.min(removeIndex, PRESET_SLOT_COUNT - 1));
+
+  while (presets.length < PRESET_SLOT_COUNT) {
+    presets.push(createBlankPreset());
+  }
+
+  presets.splice(normalizedRemove, 1);
+  presets.push(createBlankPreset());
+
+  return setPresetsArray(draft, presets.slice(0, PRESET_SLOT_COUNT));
+}
+
 export function insertPresetIntoSetlistDraft(
   draft: SetlistDraftLike,
   preset: LoadedPresetData,
@@ -84,7 +123,7 @@ export function insertPresetIntoSetlistDraft(
   presets.splice(normalizedIndex, 0, clone(preset.slotData));
 
   while (presets.length < PRESET_SLOT_COUNT) {
-    presets.push({});
+    presets.push(createBlankPreset());
   }
 
   const truncated = presets.length > PRESET_SLOT_COUNT;

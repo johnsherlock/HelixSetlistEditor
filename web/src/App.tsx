@@ -1,6 +1,12 @@
 import { type DragEvent, useEffect, useMemo, useState } from "react";
 
-import { getPresetNames, insertPresetIntoSetlistDraft, PRESET_SLOT_COUNT } from "../../src/domain/index.js";
+import {
+  getPresetNames,
+  insertPresetIntoSetlistDraft,
+  movePresetWithinSetlistDraft,
+  PRESET_SLOT_COUNT,
+  removePresetFromSetlistDraft,
+} from "../../src/domain/index.js";
 import { fetchPresets, fetchSetlists, loadPreset, loadSetlist, saveSetlist } from "./api";
 import type { LibraryEntry, SetlistDraft } from "./types";
 
@@ -13,6 +19,10 @@ type PendingAction =
   | null;
 
 type SaveAsReason = "manual" | "switch";
+type DragSource =
+  | { kind: "library-preset"; relativePath: string }
+  | { kind: "setlist-row"; index: number }
+  | null;
 
 function createSlotLabels(): string[] {
   const labels = ["A", "B", "C", "D"];
@@ -100,7 +110,7 @@ export function App() {
   const [showSaveAsModal, setShowSaveAsModal] = useState(false);
   const [saveAsReason, setSaveAsReason] = useState<SaveAsReason>("manual");
   const [saveAsInput, setSaveAsInput] = useState("");
-  const [draggedPresetPath, setDraggedPresetPath] = useState<string | null>(null);
+  const [dragSource, setDragSource] = useState<DragSource>(null);
   const [activeDropIndex, setActiveDropIndex] = useState<number | null>(null);
 
   const filteredPresets = useMemo(() => {
@@ -197,16 +207,20 @@ export function App() {
   }
 
   function handlePresetDragStart(relativePath: string): void {
-    setDraggedPresetPath(relativePath);
+    setDragSource({ kind: "library-preset", relativePath });
   }
 
-  function handlePresetDragEnd(): void {
-    setDraggedPresetPath(null);
+  function handleSetlistRowDragStart(index: number): void {
+    setDragSource({ kind: "setlist-row", index });
+  }
+
+  function handleDragEnd(): void {
+    setDragSource(null);
     setActiveDropIndex(null);
   }
 
   function handleInsertDragOver(event: DragEvent<HTMLDivElement>, insertIndex: number): void {
-    if (!draft || !draggedPresetPath) {
+    if (!draft || !dragSource) {
       return;
     }
 
@@ -214,56 +228,79 @@ export function App() {
     setActiveDropIndex(insertIndex);
   }
 
-  async function handlePresetDrop(event: DragEvent<HTMLDivElement>, insertIndex: number): Promise<void> {
+  async function handleDrop(event: DragEvent<HTMLDivElement>, insertIndex: number): Promise<void> {
     event.preventDefault();
 
-    if (!draft || !draggedPresetPath) {
+    if (!draft || !dragSource) {
       setActiveDropIndex(null);
       return;
     }
 
-    const lastPresetName = presetNames[PRESET_SLOT_COUNT - 1]?.trim();
-
-    if (lastPresetName) {
-      const confirmed = window.confirm(
-        `Inserting here will drop slot 32D (${lastPresetName}). Continue?`,
-      );
-
-      if (!confirmed) {
-        setActiveDropIndex(null);
-        setDraggedPresetPath(null);
-        return;
-      }
-    }
-
     try {
-      setLoading(true);
       setErrorMessage(null);
 
-      const loadedPreset = await loadPreset(homeDir, draggedPresetPath);
-      const { nextDraft, droppedPresetName, truncatedExistingPreset } = insertPresetIntoSetlistDraft(
-        draft,
-        {
-          relativePath: loadedPreset.file.relativePath,
-          name: loadedPreset.preset.name ?? loadedPreset.file.name,
-          slotData: loadedPreset.preset.slotData,
-        },
-        insertIndex,
-      );
+      if (dragSource.kind === "library-preset") {
+        const effectiveInsertIndex = Math.min(insertIndex, PRESET_SLOT_COUNT - 1);
+        const lastPresetName = presetNames[PRESET_SLOT_COUNT - 1]?.trim();
 
-      if (truncatedExistingPreset && droppedPresetName) {
-        setErrorMessage(`Inserted ${loadedPreset.file.name}. Slot 32D (${droppedPresetName}) was dropped.`);
+        if (lastPresetName) {
+          const confirmed = window.confirm(
+            `Inserting here will drop slot 32D (${lastPresetName}). Continue?`,
+          );
+
+          if (!confirmed) {
+            return;
+          }
+        }
+
+        setLoading(true);
+        const loadedPreset = await loadPreset(homeDir, dragSource.relativePath);
+        const { nextDraft, droppedPresetName, truncatedExistingPreset } = insertPresetIntoSetlistDraft(
+          draft,
+          {
+            relativePath: loadedPreset.file.relativePath,
+            name: loadedPreset.preset.name ?? loadedPreset.file.name,
+            slotData: loadedPreset.preset.slotData,
+          },
+          effectiveInsertIndex,
+        );
+
+        if (truncatedExistingPreset && droppedPresetName) {
+          setErrorMessage(`Inserted ${loadedPreset.file.name}. Slot 32D (${droppedPresetName}) was dropped.`);
+        }
+
+        setDraft(nextDraft as SetlistDraft);
+        setDirty(true);
+        return;
       }
+
+      if (dragSource.index === insertIndex || dragSource.index + 1 === insertIndex) {
+        return;
+      }
+
+      const nextDraft = movePresetWithinSetlistDraft(draft, dragSource.index, insertIndex);
 
       setDraft(nextDraft as SetlistDraft);
       setDirty(true);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Failed to insert preset into setlist.");
+      setErrorMessage(error instanceof Error ? error.message : "Failed to update the setlist.");
     } finally {
       setLoading(false);
       setActiveDropIndex(null);
-      setDraggedPresetPath(null);
+      setDragSource(null);
     }
+  }
+
+  function handleRemovePreset(index: number): void {
+    if (!draft) {
+      return;
+    }
+
+    const nextDraft = removePresetFromSetlistDraft(draft, index);
+
+    setDraft(nextDraft as SetlistDraft);
+    setDirty(true);
+    setErrorMessage(null);
   }
 
   async function handleSave(): Promise<boolean> {
@@ -487,10 +524,10 @@ export function App() {
             {filteredPresets.map((entry) => (
               <div
                 key={entry.relativePath}
-                className={`preset-row ${draggedPresetPath === entry.relativePath ? "dragging" : ""}`}
+                className={`preset-row ${dragSource?.kind === "library-preset" && dragSource.relativePath === entry.relativePath ? "dragging" : ""}`}
                 draggable
                 onDragStart={() => handlePresetDragStart(entry.relativePath)}
-                onDragEnd={handlePresetDragEnd}
+                onDragEnd={handleDragEnd}
               >
                 <span>{entry.name}</span>
               </div>
@@ -542,18 +579,43 @@ export function App() {
             {presetNames.map((name, index) => (
               <div key={slotLabels[index]} className="setlist-slot">
                 <div
-                  className={`drop-gap ${activeDropIndex === index ? "active" : ""}`}
+                  className={`drop-gap ${activeDropIndex === index ? "active" : ""} ${dragSource ? "visible" : ""}`}
                   onDragOver={(event) => handleInsertDragOver(event, index)}
-                  onDrop={(event) => void handlePresetDrop(event, index)}
+                  onDrop={(event) => void handleDrop(event, index)}
                 >
                   <span>Insert here</span>
                 </div>
-                <div className="setlist-row">
+                <div
+                  className={`setlist-row ${dragSource?.kind === "setlist-row" && dragSource.index === index ? "dragging" : ""}`}
+                  draggable
+                  onDragStart={() => handleSetlistRowDragStart(index)}
+                  onDragEnd={handleDragEnd}
+                >
                   <span className="slot-label">{slotLabels[index]}</span>
                   <span className={`preset-name ${name ? "" : "blank"}`}>{name || "<empty>"}</span>
+                  <button
+                    className="remove-button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleRemovePreset(index);
+                    }}
+                    onMouseDown={(event) => event.stopPropagation()}
+                    type="button"
+                    draggable={false}
+                    aria-label={`Remove preset from ${slotLabels[index]}`}
+                  >
+                    x
+                  </button>
                 </div>
               </div>
             ))}
+            <div
+              className={`drop-gap final-gap ${activeDropIndex === PRESET_SLOT_COUNT ? "active" : ""} ${dragSource ? "visible" : ""}`}
+              onDragOver={(event) => handleInsertDragOver(event, PRESET_SLOT_COUNT)}
+              onDrop={(event) => void handleDrop(event, PRESET_SLOT_COUNT)}
+            >
+              <span>Insert here</span>
+            </div>
           </div>
         </section>
       </main>
