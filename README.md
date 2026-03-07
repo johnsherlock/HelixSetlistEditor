@@ -22,6 +22,7 @@ The current app supports:
 - Loading a Helix home directory with `/Setlists` and `/Presets`
 - Listing available `.hls` setlists and `.hlx` presets
 - Loading an existing setlist into the editor
+- Creating a new setlist draft from a blank `.hls` template
 - Editing the setlist name
 - Dirty-state tracking with save/discard prompts
 - Saving a setlist in place
@@ -36,13 +37,7 @@ The current app supports:
 
 ## In Progress / Planned
 
-The next major feature is:
-
-- Creating a brand new setlist safely
-
-This is intentionally deferred until the project locks a reliable blank/template strategy for unused preset slots and empty setlists.
-
-Likely follow-on work:
+Current follow-on work:
 
 - Better drag/drop polish
 - More fixture coverage across real `.hlx` and `.hls` samples
@@ -104,6 +99,8 @@ Run the compiled app:
 npm start
 ```
 
+`npm start` rebuilds the app first and then serves the current compiled output.
+
 If port `3000` is already in use:
 
 ```bash
@@ -113,9 +110,17 @@ PORT=3001 npm start
 For frontend iteration with Vite:
 
 ```bash
-npm start
+npm run serve
 npm run dev:web
 ```
+
+## Template Requirement
+
+The `New` action loads a blank setlist from:
+
+- `/Setlists/Blank Setlist.hls`
+
+That file is treated as the known-good template for new setlist drafts. If the selected Helix home directory does not contain that file, creating a new setlist will fail.
 
 ## File Format Notes
 

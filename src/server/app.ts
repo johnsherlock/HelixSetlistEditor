@@ -112,8 +112,17 @@ export function createApp(): FastifyInstance {
     try {
       const library = createLibraryFromHomeDir(request.query.homeDir);
       await library.deleteSetlist(request.query.relativePath);
+      console.info("[helix-server] deleted setlist", {
+        homeDir: request.query.homeDir,
+        relativePath: request.query.relativePath,
+      });
       return { ok: true };
     } catch (error) {
+      console.error("[helix-server] delete setlist failed", {
+        homeDir: request.query.homeDir,
+        relativePath: request.query.relativePath,
+        error,
+      });
       return reply.code(400).send({
         error: error instanceof Error ? error.message : "Failed to delete setlist.",
       });

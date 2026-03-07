@@ -12,6 +12,8 @@ import type { LibraryEntry, SetlistDraft } from "./types";
 
 const DEFAULT_HOME_DIR = "/Users/john/Documents/Line 6/Tones/Helix";
 const LOCAL_STORAGE_HOME_KEY = "helix-setlist-home-dir";
+const NEW_SETLIST_TEMPLATE_PATH = "Blank Setlist.hls";
+const NEW_SETLIST_DEFAULT_NAME = "New Setlist";
 
 type PendingAction =
   | { kind: "switch-setlist"; relativePath: string }
@@ -183,6 +185,31 @@ export function App() {
     }
   }
 
+  async function createNewDraftFromTemplate(): Promise<void> {
+    setLoading(true);
+    setErrorMessage(null);
+
+    try {
+      const response = await loadSetlist(homeDir, NEW_SETLIST_TEMPLATE_PATH);
+      const nextDraft = setSetlistName(cloneDraft(response.draft), NEW_SETLIST_DEFAULT_NAME);
+
+      nextDraft.sourcePath = undefined;
+
+      setDraft(nextDraft);
+      setActivePath(null);
+      setDirty(true);
+      setPendingAction(null);
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : `Failed to create a new setlist from ${NEW_SETLIST_TEMPLATE_PATH}.`,
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handleDeleteSetlist(relativePath: string): Promise<void> {
     const deletingActive = relativePath === activePath;
     const deletingDirtyActive = deletingActive && dirty;
@@ -196,6 +223,12 @@ export function App() {
 
     setLoading(true);
     setErrorMessage(null);
+    console.info("[helix-ui] delete requested", {
+      homeDir,
+      relativePath,
+      deletingActive,
+      dirty,
+    });
 
     try {
       await deleteSetlist(homeDir, relativePath);
@@ -213,6 +246,11 @@ export function App() {
         }
       }
     } catch (error) {
+      console.error("[helix-ui] delete failed", {
+        homeDir,
+        relativePath,
+        error,
+      });
       setErrorMessage(error instanceof Error ? error.message : "Failed to delete setlist.");
     } finally {
       setLoading(false);
@@ -474,7 +512,7 @@ export function App() {
       return;
     }
 
-    setErrorMessage("New setlist creation is blocked until blank preset template semantics are defined.");
+    await createNewDraftFromTemplate();
   }
 
   function handleDiscardAndContinue(): void {
@@ -491,7 +529,7 @@ export function App() {
       return;
     }
 
-    setErrorMessage("New setlist creation is blocked until blank preset template semantics are defined.");
+    void createNewDraftFromTemplate();
   }
 
   function handleNew(): void {
@@ -501,7 +539,7 @@ export function App() {
       return;
     }
 
-    setErrorMessage("New setlist creation is blocked until blank preset template semantics are defined.");
+    void createNewDraftFromTemplate();
   }
 
   return (
@@ -592,7 +630,7 @@ export function App() {
             <button className="ghost-button" onClick={handleNew} disabled={saving}>
               New
             </button>
-            <button className="ghost-button" onClick={() => void handleSave()} disabled={!draft || saving}>
+            <button className="ghost-button" onClick={() => void handleSave()} disabled={!draft || !activePath || saving}>
               Save
             </button>
             <button className="ghost-button" onClick={() => beginSaveAs("manual")} disabled={!draft || saving}>
