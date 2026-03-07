@@ -21,12 +21,40 @@ function createTempHelixHome(): string {
   copyFileSync(fixturePath, join(setlistsDir, "IMGL Fibs.hls"));
   writeFileSync(
     join(presetsDir, "Crunch Patch.hlx"),
-    JSON.stringify({ meta: { name: "Crunch Patch" } }, null, 2),
+    JSON.stringify(
+      {
+        schema: "L6Preset",
+        version: 6,
+        meta: { original: 0, pbn: 0, premium: 0 },
+        data: {
+          meta: { name: "Crunch Patch", build_sha: "test" },
+          device: 2162689,
+          device_version: 58720256,
+          tone: { dsp0: {} },
+        },
+      },
+      null,
+      2,
+    ),
     "utf8",
   );
   writeFileSync(
     join(presetsDir, "Lead Patch.hlx"),
-    JSON.stringify({ meta: { name: "Lead Patch" } }, null, 2),
+    JSON.stringify(
+      {
+        schema: "L6Preset",
+        version: 6,
+        meta: { original: 0, pbn: 0, premium: 0 },
+        data: {
+          meta: { name: "Lead Patch", build_sha: "test" },
+          device: 2162689,
+          device_version: 58720256,
+          tone: { dsp0: {} },
+        },
+      },
+      null,
+      2,
+    ),
     "utf8",
   );
 
@@ -91,6 +119,27 @@ describe("Fastify file API", () => {
     expect(payload.summary.setlistName).toBe("IMGL Fibs");
     expect(payload.summary.presetCount).toBe(128);
     expect(payload.validation.crc32Matches).toBe(true);
+
+    await app.close();
+  });
+
+  it("loads a preset into slot-ready data", async () => {
+    const homeDir = createTempHelixHome();
+    const app = createApp();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/presets/load",
+      query: { homeDir, relativePath: "Crunch Patch.hlx" },
+    });
+    const payload = response.json();
+
+    expect(response.statusCode).toBe(200);
+    expect(payload.file.relativePath).toBe("Crunch Patch.hlx");
+    expect(payload.preset.schema).toBe("L6Preset");
+    expect(payload.preset.name).toBe("Crunch Patch");
+    expect(payload.preset.slotData.meta.name).toBe("Crunch Patch");
+    expect(payload.preset.slotData.tone).toEqual({ dsp0: {} });
 
     await app.close();
   });

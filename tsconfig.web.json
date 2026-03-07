@@ -10,5 +10,5 @@
     "skipLibCheck": true,
     "types": ["vite/client"]
   },
-  "include": ["web/src", "vite.config.ts"]
+  "include": ["web/src", "src/domain", "vite.config.ts"]
 }

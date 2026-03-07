@@ -37,3 +37,14 @@ export interface LoadedSetlistResponse {
 export interface ListResponse {
   items: LibraryEntry[];
 }
+
+export interface LoadedPresetResponse {
+  file: LibraryEntry;
+  preset: {
+    schema: string | null;
+    version: number | null;
+    name: string | null;
+    slotData: Record<string, unknown>;
+    wrapperMeta: Record<string, unknown>;
+  };
+}

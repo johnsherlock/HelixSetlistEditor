@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { type DragEvent, useEffect, useMemo, useState } from "react";
 
-import { fetchPresets, fetchSetlists, loadSetlist, saveSetlist } from "./api";
+import { getPresetNames, insertPresetIntoSetlistDraft, PRESET_SLOT_COUNT } from "../../src/domain/index.js";
+import { fetchPresets, fetchSetlists, loadPreset, loadSetlist, saveSetlist } from "./api";
 import type { LibraryEntry, SetlistDraft } from "./types";
 
 const DEFAULT_HOME_DIR = "/Users/john/Documents/Line 6/Tones/Helix";
-const PRESET_SLOTS = 128;
 const LOCAL_STORAGE_HOME_KEY = "helix-setlist-home-dir";
 
 type PendingAction =
@@ -70,25 +70,6 @@ function setSetlistName(draft: SetlistDraft, name: string): SetlistDraft {
   return nextDraft;
 }
 
-function getPresetNames(draft: SetlistDraft | null): string[] {
-  if (!draft) {
-    return Array.from({ length: PRESET_SLOTS }, () => "");
-  }
-
-  const innerJson = asRecord(draft.innerJson);
-  const presets = Array.isArray(innerJson.presets) ? innerJson.presets : [];
-  const names = presets.slice(0, PRESET_SLOTS).map((preset) => {
-    const presetMeta = asRecord(asRecord(preset).meta);
-    return typeof presetMeta.name === "string" ? presetMeta.name : "";
-  });
-
-  while (names.length < PRESET_SLOTS) {
-    names.push("");
-  }
-
-  return names;
-}
-
 async function saveDraft(args: {
   homeDir: string;
   relativePath: string;
@@ -119,6 +100,8 @@ export function App() {
   const [showSaveAsModal, setShowSaveAsModal] = useState(false);
   const [saveAsReason, setSaveAsReason] = useState<SaveAsReason>("manual");
   const [saveAsInput, setSaveAsInput] = useState("");
+  const [draggedPresetPath, setDraggedPresetPath] = useState<string | null>(null);
+  const [activeDropIndex, setActiveDropIndex] = useState<number | null>(null);
 
   const filteredPresets = useMemo(() => {
     const query = presetFilter.trim().toLowerCase();
@@ -211,6 +194,76 @@ export function App() {
 
     setDraft(setSetlistName(draft, name));
     setDirty(true);
+  }
+
+  function handlePresetDragStart(relativePath: string): void {
+    setDraggedPresetPath(relativePath);
+  }
+
+  function handlePresetDragEnd(): void {
+    setDraggedPresetPath(null);
+    setActiveDropIndex(null);
+  }
+
+  function handleInsertDragOver(event: DragEvent<HTMLDivElement>, insertIndex: number): void {
+    if (!draft || !draggedPresetPath) {
+      return;
+    }
+
+    event.preventDefault();
+    setActiveDropIndex(insertIndex);
+  }
+
+  async function handlePresetDrop(event: DragEvent<HTMLDivElement>, insertIndex: number): Promise<void> {
+    event.preventDefault();
+
+    if (!draft || !draggedPresetPath) {
+      setActiveDropIndex(null);
+      return;
+    }
+
+    const lastPresetName = presetNames[PRESET_SLOT_COUNT - 1]?.trim();
+
+    if (lastPresetName) {
+      const confirmed = window.confirm(
+        `Inserting here will drop slot 32D (${lastPresetName}). Continue?`,
+      );
+
+      if (!confirmed) {
+        setActiveDropIndex(null);
+        setDraggedPresetPath(null);
+        return;
+      }
+    }
+
+    try {
+      setLoading(true);
+      setErrorMessage(null);
+
+      const loadedPreset = await loadPreset(homeDir, draggedPresetPath);
+      const { nextDraft, droppedPresetName, truncatedExistingPreset } = insertPresetIntoSetlistDraft(
+        draft,
+        {
+          relativePath: loadedPreset.file.relativePath,
+          name: loadedPreset.preset.name ?? loadedPreset.file.name,
+          slotData: loadedPreset.preset.slotData,
+        },
+        insertIndex,
+      );
+
+      if (truncatedExistingPreset && droppedPresetName) {
+        setErrorMessage(`Inserted ${loadedPreset.file.name}. Slot 32D (${droppedPresetName}) was dropped.`);
+      }
+
+      setDraft(nextDraft as SetlistDraft);
+      setDirty(true);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to insert preset into setlist.");
+    } finally {
+      setLoading(false);
+      setActiveDropIndex(null);
+      setDraggedPresetPath(null);
+    }
   }
 
   async function handleSave(): Promise<boolean> {
@@ -399,7 +452,7 @@ export function App() {
           </div>
         </div>
 
-        <section className="panel list-panel">
+        <section className="panel list-panel setlists-panel">
           <div className="panel-header">
             <h2>Setlists</h2>
             <span>{setlists.length}</span>
@@ -432,7 +485,13 @@ export function App() {
           />
           <div className="scroll-region">
             {filteredPresets.map((entry) => (
-              <div key={entry.relativePath} className="preset-row">
+              <div
+                key={entry.relativePath}
+                className={`preset-row ${draggedPresetPath === entry.relativePath ? "dragging" : ""}`}
+                draggable
+                onDragStart={() => handlePresetDragStart(entry.relativePath)}
+                onDragEnd={handlePresetDragEnd}
+              >
                 <span>{entry.name}</span>
               </div>
             ))}
@@ -481,9 +540,18 @@ export function App() {
 
           <div className="setlist-grid">
             {presetNames.map((name, index) => (
-              <div key={slotLabels[index]} className="setlist-row">
-                <span className="slot-label">{slotLabels[index]}</span>
-                <span className={`preset-name ${name ? "" : "blank"}`}>{name || "<empty>"}</span>
+              <div key={slotLabels[index]} className="setlist-slot">
+                <div
+                  className={`drop-gap ${activeDropIndex === index ? "active" : ""}`}
+                  onDragOver={(event) => handleInsertDragOver(event, index)}
+                  onDrop={(event) => void handlePresetDrop(event, index)}
+                >
+                  <span>Insert here</span>
+                </div>
+                <div className="setlist-row">
+                  <span className="slot-label">{slotLabels[index]}</span>
+                  <span className={`preset-name ${name ? "" : "blank"}`}>{name || "<empty>"}</span>
+                </div>
               </div>
             ))}
           </div>

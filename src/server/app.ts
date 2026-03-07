@@ -80,6 +80,17 @@ export function createApp(): FastifyInstance {
     }
   });
 
+  app.get<{ Querystring: PathQuery }>("/api/presets/load", async (request, reply) => {
+    try {
+      const library = createLibraryFromHomeDir(request.query.homeDir);
+      return await library.loadPreset(request.query.relativePath);
+    } catch (error) {
+      return reply.code(400).send({
+        error: error instanceof Error ? error.message : "Failed to load preset.",
+      });
+    }
+  });
+
   app.post<{ Body: SaveSetlistBody }>("/api/setlists/save", async (request, reply) => {
     try {
       const library = createLibraryFromHomeDir(request.body.homeDir);

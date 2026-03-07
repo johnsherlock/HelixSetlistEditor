@@ -38,6 +38,17 @@ export interface SaveSetlistInput<TInner = unknown> {
   draft: SetlistDraft<TInner>;
 }
 
+export interface LoadedPreset {
+  file: LibraryEntry;
+  preset: {
+    schema: string | null;
+    version: number | null;
+    name: string | null;
+    slotData: Record<string, unknown>;
+    wrapperMeta: Record<string, unknown>;
+  };
+}
+
 const COLLECTIONS = {
   presets: { directoryName: "Presets", extension: ".hlx" },
   setlists: { directoryName: "Setlists", extension: ".hls" },
@@ -89,6 +100,31 @@ export class HelixLibraryService {
       summary: {
         setlistName: typeof metaRecord.name === "string" ? metaRecord.name : null,
         presetCount: presets?.length ?? null,
+      },
+    };
+  }
+
+  async loadPreset(relativePath: string): Promise<LoadedPreset> {
+    const absolutePath = this.resolveCollectionPath("presets", relativePath);
+    const fileBuffer = await readFile(absolutePath, "utf8");
+    const fileStats = await stat(absolutePath);
+    const parsed = JSON.parse(fileBuffer) as Record<string, unknown>;
+    const data = this.asRecord(parsed.data);
+    const dataMeta = this.asRecord(data.meta);
+
+    return {
+      file: {
+        name: this.getBaseName(relativePath),
+        relativePath,
+        modifiedAt: fileStats.mtime.toISOString(),
+        size: fileStats.size,
+      },
+      preset: {
+        schema: typeof parsed.schema === "string" ? parsed.schema : null,
+        version: typeof parsed.version === "number" ? parsed.version : null,
+        name: typeof dataMeta.name === "string" ? dataMeta.name : null,
+        slotData: data,
+        wrapperMeta: this.asRecord(parsed.meta),
       },
     };
   }

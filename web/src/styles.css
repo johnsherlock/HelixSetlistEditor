@@ -52,7 +52,7 @@ input {
 
 .sidebar {
   display: grid;
-  grid-template-rows: auto 1fr 1.4fr;
+  grid-template-rows: auto 300px minmax(380px, 1fr);
   gap: 18px;
 }
 
@@ -79,6 +79,10 @@ input {
   grid-template-rows: auto auto 1fr;
   gap: 14px;
   min-height: 0;
+}
+
+.setlists-panel {
+  height: 300px;
 }
 
 .panel-header,
@@ -242,10 +246,15 @@ input {
 
 .preset-row {
   border: 1px solid transparent;
+  cursor: grab;
 }
 
 .preset-row:hover {
   border-color: rgba(139, 222, 195, 0.12);
+}
+
+.preset-row.dragging {
+  opacity: 0.45;
 }
 
 .setlist-grid {
@@ -253,6 +262,33 @@ input {
   gap: 10px;
   align-content: start;
   padding-right: 4px;
+}
+
+.setlist-slot {
+  display: grid;
+  gap: 8px;
+}
+
+.drop-gap {
+  min-height: 10px;
+  border-radius: 999px;
+  border: 1px dashed transparent;
+  background: transparent;
+  color: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: min-height 120ms ease, border-color 120ms ease, background 120ms ease, color 120ms ease;
+}
+
+.drop-gap.active {
+  min-height: 32px;
+  border-color: rgba(139, 222, 195, 0.65);
+  background: rgba(139, 222, 195, 0.14);
+  color: var(--accent);
 }
 
 .setlist-row {
@@ -325,7 +361,7 @@ input {
   }
 
   .sidebar {
-    grid-template-rows: auto auto auto;
+    grid-template-rows: auto 300px minmax(300px, 1fr);
   }
 
   .hero {

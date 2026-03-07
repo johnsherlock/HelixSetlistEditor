@@ -1,4 +1,4 @@
-import type { LibraryEntry, ListResponse, LoadedSetlistResponse, SetlistDraft } from "./types";
+import type { LibraryEntry, ListResponse, LoadedPresetResponse, LoadedSetlistResponse, SetlistDraft } from "./types";
 
 async function requestJson<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
@@ -32,6 +32,11 @@ export async function fetchPresets(homeDir: string): Promise<LibraryEntry[]> {
 export async function loadSetlist(homeDir: string, relativePath: string): Promise<LoadedSetlistResponse> {
   const params = new URLSearchParams({ homeDir, relativePath });
   return requestJson<LoadedSetlistResponse>(`/api/setlists/load?${params.toString()}`);
+}
+
+export async function loadPreset(homeDir: string, relativePath: string): Promise<LoadedPresetResponse> {
+  const params = new URLSearchParams({ homeDir, relativePath });
+  return requestJson<LoadedPresetResponse>(`/api/presets/load?${params.toString()}`);
 }
 
 export async function saveSetlist(input: {
