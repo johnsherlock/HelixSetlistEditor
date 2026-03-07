@@ -51,3 +51,10 @@ export async function saveSetlist(input: {
   });
   return response.file;
 }
+
+export async function deleteSetlist(homeDir: string, relativePath: string): Promise<void> {
+  const params = new URLSearchParams({ homeDir, relativePath });
+  await requestJson<{ ok: true }>(`/api/setlists?${params.toString()}`, {
+    method: "DELETE",
+  });
+}

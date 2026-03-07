@@ -7,7 +7,7 @@ import {
   PRESET_SLOT_COUNT,
   removePresetFromSetlistDraft,
 } from "../../src/domain/index.js";
-import { fetchPresets, fetchSetlists, loadPreset, loadSetlist, saveSetlist } from "./api";
+import { deleteSetlist, fetchPresets, fetchSetlists, loadPreset, loadSetlist, saveSetlist } from "./api";
 import type { LibraryEntry, SetlistDraft } from "./types";
 
 const DEFAULT_HOME_DIR = "/Users/john/Documents/Line 6/Tones/Helix";
@@ -178,6 +178,42 @@ export function App() {
       setDirty(false);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Failed to load the selected setlist.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleDeleteSetlist(relativePath: string): Promise<void> {
+    const deletingActive = relativePath === activePath;
+    const deletingDirtyActive = deletingActive && dirty;
+    const confirmationMessage = deletingDirtyActive
+      ? `Delete ${relativePath} from disk? This will also discard the current unsaved edits in the editor.`
+      : `Delete ${relativePath} from disk?`;
+
+    if (!window.confirm(confirmationMessage)) {
+      return;
+    }
+
+    setLoading(true);
+    setErrorMessage(null);
+
+    try {
+      await deleteSetlist(homeDir, relativePath);
+      const nextSetlists = await fetchSetlists(homeDir);
+
+      setSetlists(nextSetlists);
+
+      if (deletingActive) {
+        setActivePath(null);
+        setDraft(null);
+        setDirty(false);
+
+        if (nextSetlists[0]) {
+          await loadIntoEditor(nextSetlists[0].relativePath);
+        }
+      }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to delete setlist.");
     } finally {
       setLoading(false);
     }
@@ -496,14 +532,23 @@ export function App() {
           </div>
           <div className="scroll-region">
             {setlists.map((entry) => (
-              <button
-                key={entry.relativePath}
-                className={`list-row ${entry.relativePath === activePath ? "active" : ""}`}
-                onClick={() => handleSelectSetlist(entry.relativePath)}
-              >
-                <span>{entry.name}</span>
-                {dirty && entry.relativePath === activePath ? <strong>*</strong> : null}
-              </button>
+              <div key={entry.relativePath} className={`list-row ${entry.relativePath === activePath ? "active" : ""}`}>
+                <button className="list-select" onClick={() => handleSelectSetlist(entry.relativePath)}>
+                  <span>{entry.name}</span>
+                  {dirty && entry.relativePath === activePath ? <strong>*</strong> : null}
+                </button>
+                <button
+                  className="delete-button"
+                  type="button"
+                  aria-label={`Delete ${entry.name}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void handleDeleteSetlist(entry.relativePath);
+                  }}
+                >
+                  x
+                </button>
+              </div>
             ))}
             {!setlists.length ? <p className="empty-state">No setlists found in /Setlists.</p> : null}
           </div>

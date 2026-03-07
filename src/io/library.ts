@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, stat, unlink, writeFile } from "node:fs/promises";
 import { extname, join, relative, resolve } from "node:path";
 
 import {
@@ -151,6 +151,11 @@ export class HelixLibraryService {
       modifiedAt: fileStats.mtime.toISOString(),
       size: fileStats.size,
     };
+  }
+
+  async deleteSetlist(relativePath: string): Promise<void> {
+    const absolutePath = this.resolveCollectionPath("setlists", relativePath);
+    await unlink(absolutePath);
   }
 
   private async listCollection(collection: CollectionName): Promise<LibraryEntry[]> {

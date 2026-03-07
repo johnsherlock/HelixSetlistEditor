@@ -108,6 +108,18 @@ export function createApp(): FastifyInstance {
     }
   });
 
+  app.delete<{ Querystring: PathQuery }>("/api/setlists", async (request, reply) => {
+    try {
+      const library = createLibraryFromHomeDir(request.query.homeDir);
+      await library.deleteSetlist(request.query.relativePath);
+      return { ok: true };
+    } catch (error) {
+      return reply.code(400).send({
+        error: error instanceof Error ? error.message : "Failed to delete setlist.",
+      });
+    }
+  });
+
   if (existsSync(resolve(webRoot, "index.html"))) {
     void app.register(fastifyStatic, {
       root: webRoot,

@@ -200,4 +200,26 @@ describe("Fastify file API", () => {
 
     await app.close();
   });
+
+  it("deletes a setlist file from disk", async () => {
+    const homeDir = createTempHelixHome();
+    const app = createApp();
+
+    const deleteResponse = await app.inject({
+      method: "DELETE",
+      url: "/api/setlists",
+      query: { homeDir, relativePath: "IMGL Fibs.hls" },
+    });
+    const listResponse = await app.inject({
+      method: "GET",
+      url: "/api/setlists",
+      query: { homeDir },
+    });
+
+    expect(deleteResponse.statusCode).toBe(200);
+    expect(deleteResponse.json()).toEqual({ ok: true });
+    expect(listResponse.json().items).toHaveLength(0);
+
+    await app.close();
+  });
 });
