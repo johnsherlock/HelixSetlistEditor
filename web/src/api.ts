@@ -1,96 +1,200 @@
-import type { LibraryEntry, ListResponse, LoadedPresetResponse, LoadedSetlistResponse, SetlistDraft } from "./types";
+import { invoke } from "@tauri-apps/api/core";
+import { open, save } from "@tauri-apps/plugin-dialog";
 
-function debugApi(message: string, details?: unknown): void {
-  console.info(`[helix-api] ${message}`, details ?? "");
+import { createOuterTemplate, decodeHlsFile, encodeHlsFile } from "../../src/core/index.js";
+import type {
+  AppSettings,
+  LibraryEntry,
+  LoadedPresetResponse,
+  LoadedSetlistResponse,
+  SetlistDraft,
+} from "./types";
+
+const APP_SETTINGS_KEY = "helix-setlist-editor:desktop-settings";
+
+function debugDesktop(message: string, details?: unknown): void {
+  console.info(`[helix-desktop] ${message}`, details ?? "");
 }
 
-async function requestJson<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
-  debugApi("request", {
-    input: String(input),
-    method: init?.method ?? "GET",
-  });
+function getBaseName(absolutePath: string): string {
+  return absolutePath.split(/[\\/]/).pop()?.replace(/\.[^.]+$/, "") ?? absolutePath;
+}
 
-  const response = await fetch(input, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-  });
-  const responseText = await response.text();
-  const payload = (() => {
-    if (!responseText.trim()) {
-      return {} as T & { error?: string };
-    }
-
-    try {
-      return JSON.parse(responseText) as T & { error?: string };
-    } catch {
-      return {
-        error: responseText,
-      } as T & { error?: string };
-    }
-  })();
-
-  if (!response.ok) {
-    console.error("[helix-api] request failed", {
-      input: String(input),
-      method: init?.method ?? "GET",
-      status: response.status,
-      statusText: response.statusText,
-      payload,
-    });
-    throw new Error(payload.error ?? "Request failed.");
+function normalizeDirectoryResult(result: string | string[] | null): string | null {
+  if (!result) {
+    return null;
   }
 
-  debugApi("response", {
-    input: String(input),
-    method: init?.method ?? "GET",
-    status: response.status,
+  return Array.isArray(result) ? (result[0] ?? null) : result;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+}
+
+async function invokeCommand<T>(command: string, payload?: Record<string, unknown>): Promise<T> {
+  debugDesktop(`invoke ${command}`, payload);
+  try {
+    return await invoke<T>(command, payload);
+  } catch (error) {
+    console.error(`[helix-desktop] ${command} failed`, { payload, error });
+    throw error;
+  }
+}
+
+export async function pickSetlistDirectory(): Promise<string | null> {
+  return normalizeDirectoryResult(
+    await open({
+      directory: true,
+      multiple: false,
+      title: "Select Setlist Directory",
+    }),
+  );
+}
+
+export async function pickPresetDirectory(): Promise<string | null> {
+  return normalizeDirectoryResult(
+    await open({
+      directory: true,
+      multiple: false,
+      title: "Select Preset Directory",
+    }),
+  );
+}
+
+export async function listSetlists(directory: string): Promise<LibraryEntry[]> {
+  return invokeCommand<LibraryEntry[]>("list_library_entries", {
+    directory,
+    extension: ".hls",
   });
-
-  return payload;
 }
 
-export async function fetchSetlists(homeDir: string): Promise<LibraryEntry[]> {
-  const params = new URLSearchParams({ homeDir });
-  const response = await requestJson<ListResponse>(`/api/setlists?${params.toString()}`);
-  return response.items;
+export async function listPresets(directory: string): Promise<LibraryEntry[]> {
+  return invokeCommand<LibraryEntry[]>("list_library_entries", {
+    directory,
+    extension: ".hlx",
+  });
 }
 
-export async function fetchPresets(homeDir: string): Promise<LibraryEntry[]> {
-  const params = new URLSearchParams({ homeDir });
-  const response = await requestJson<ListResponse>(`/api/presets?${params.toString()}`);
-  return response.items;
+export async function loadSetlist(absolutePath: string): Promise<LoadedSetlistResponse> {
+  const fileText = await invokeCommand<string>("read_text_file", { absolutePath });
+  const decoded = decodeHlsFile<Record<string, unknown>>(fileText);
+  const innerRecord = asRecord(decoded.innerJson);
+  const metaRecord = asRecord(innerRecord.meta);
+  const presets = Array.isArray(innerRecord.presets) ? innerRecord.presets : null;
+
+  return {
+    file: {
+      name: getBaseName(absolutePath),
+      absolutePath,
+      modifiedAt: "",
+      size: fileText.length,
+    },
+    draft: {
+      sourcePath: absolutePath,
+      outerTemplate: createOuterTemplate(decoded.outer),
+      innerJson: decoded.innerJson,
+    },
+    validation: decoded.validation,
+    summary: {
+      setlistName: typeof metaRecord.name === "string" ? metaRecord.name : null,
+      presetCount: presets?.length ?? null,
+    },
+  };
 }
 
-export async function loadSetlist(homeDir: string, relativePath: string): Promise<LoadedSetlistResponse> {
-  const params = new URLSearchParams({ homeDir, relativePath });
-  return requestJson<LoadedSetlistResponse>(`/api/setlists/load?${params.toString()}`);
-}
+export async function loadPreset(absolutePath: string): Promise<LoadedPresetResponse> {
+  const fileText = await invokeCommand<string>("read_text_file", { absolutePath });
+  const parsed = JSON.parse(fileText) as Record<string, unknown>;
+  const slotData = asRecord(parsed.data);
+  const slotMeta = asRecord(slotData.meta);
 
-export async function loadPreset(homeDir: string, relativePath: string): Promise<LoadedPresetResponse> {
-  const params = new URLSearchParams({ homeDir, relativePath });
-  return requestJson<LoadedPresetResponse>(`/api/presets/load?${params.toString()}`);
+  return {
+    file: {
+      name: getBaseName(absolutePath),
+      absolutePath,
+      modifiedAt: "",
+      size: fileText.length,
+    },
+    preset: {
+      schema: typeof parsed.schema === "string" ? parsed.schema : null,
+      version: typeof parsed.version === "number" ? parsed.version : null,
+      name: typeof slotMeta.name === "string" ? slotMeta.name : null,
+      slotData,
+      wrapperMeta: asRecord(parsed.meta),
+    },
+  };
 }
 
 export async function saveSetlist(input: {
-  homeDir: string;
-  relativePath: string;
+  absolutePath: string;
   overwrite?: boolean;
   draft: SetlistDraft;
 }): Promise<LibraryEntry> {
-  const response = await requestJson<{ file: LibraryEntry }>("/api/setlists/save", {
-    method: "POST",
-    body: JSON.stringify(input),
+  const fileText = encodeHlsFile(input.draft.innerJson, input.draft.outerTemplate);
+
+  await invokeCommand<void>("write_text_file", {
+    absolutePath: input.absolutePath,
+    contents: fileText,
+    overwrite: input.overwrite ?? false,
   });
-  return response.file;
+
+  return {
+    name: getBaseName(input.absolutePath),
+    absolutePath: input.absolutePath,
+    modifiedAt: "",
+    size: fileText.length,
+  };
 }
 
-export async function deleteSetlist(homeDir: string, relativePath: string): Promise<void> {
-  const params = new URLSearchParams({ homeDir, relativePath });
-  debugApi("delete setlist", { homeDir, relativePath });
-  await requestJson<{ ok: true }>(`/api/setlists?${params.toString()}`, {
-    method: "DELETE",
+export async function saveSetlistAs(input: {
+  draft: SetlistDraft;
+  suggestedFileName: string;
+  initialDirectory?: string | null;
+}): Promise<LibraryEntry | null> {
+  const selectedPath = await save({
+    title: "Save Helix Setlist",
+    defaultPath: input.initialDirectory
+      ? `${input.initialDirectory.replace(/[\\/]$/, "")}/${input.suggestedFileName}`
+      : input.suggestedFileName,
+    filters: [{ name: "Helix Setlist", extensions: ["hls"] }],
   });
+
+  if (!selectedPath) {
+    return null;
+  }
+
+  return saveSetlist({
+    absolutePath: selectedPath,
+    overwrite: true,
+    draft: input.draft,
+  });
+}
+
+export async function loadBlankTemplate(): Promise<SetlistDraft> {
+  const fileText = await invokeCommand<string>("load_blank_template");
+  const decoded = decodeHlsFile<Record<string, unknown>>(fileText);
+
+  return {
+    outerTemplate: createOuterTemplate(decoded.outer),
+    innerJson: decoded.innerJson,
+  };
+}
+
+export async function loadAppSettings(): Promise<AppSettings> {
+  try {
+    const raw = localStorage.getItem(APP_SETTINGS_KEY);
+
+    if (!raw) {
+      return {};
+    }
+
+    return JSON.parse(raw) as AppSettings;
+  } catch {
+    return {};
+  }
+}
+
+export async function saveAppSettings(settings: AppSettings): Promise<void> {
+  localStorage.setItem(APP_SETTINGS_KEY, JSON.stringify(settings));
 }

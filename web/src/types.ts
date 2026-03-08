@@ -1,6 +1,6 @@
 export interface LibraryEntry {
   name: string;
-  relativePath: string;
+  absolutePath: string;
   modifiedAt: string;
   size: number;
 }
@@ -34,10 +34,6 @@ export interface LoadedSetlistResponse {
   };
 }
 
-export interface ListResponse {
-  items: LibraryEntry[];
-}
-
 export interface LoadedPresetResponse {
   file: LibraryEntry;
   preset: {
@@ -47,4 +43,9 @@ export interface LoadedPresetResponse {
     slotData: Record<string, unknown>;
     wrapperMeta: Record<string, unknown>;
   };
+}
+
+export interface AppSettings {
+  setlistDirectory?: string;
+  presetDirectory?: string;
 }

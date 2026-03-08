@@ -62,7 +62,7 @@ input {
 
 .sidebar {
   display: grid;
-  grid-template-rows: auto 300px minmax(380px, 1fr);
+  grid-template-rows: 300px minmax(0, 1fr);
   gap: 18px;
 }
 
@@ -94,18 +94,26 @@ input {
 
 .setlists-panel {
   height: 300px;
+  grid-template-rows: auto 1fr;
+}
+
+.panel-header,
+.panel-header-main,
+.status-row,
+.title-row,
+.action-row,
+.modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .panel-header,
 .status-row,
 .title-row,
 .action-row,
-.home-dir-row,
 .modal-actions {
-  display: flex;
-  align-items: center;
   justify-content: space-between;
-  gap: 12px;
 }
 
 .panel-header h2,
@@ -183,6 +191,27 @@ input {
   font-family: "Baskerville", "Times New Roman", serif;
 }
 
+.title-row {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.title-label {
+  min-width: 92px;
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.path-label {
+  flex: 1 1 280px;
+  min-width: 220px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.35;
+  word-break: break-all;
+}
+
 .dirty-indicator {
   min-width: 20px;
   font-size: 1.6rem;
@@ -190,6 +219,7 @@ input {
 }
 
 .ghost-button,
+.icon-button,
 .solid-button {
   border-radius: 999px;
   padding: 10px 16px;
@@ -203,6 +233,21 @@ input {
   color: var(--text);
 }
 
+.icon-button {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(12, 15, 18, 0.72);
+  color: var(--accent);
+}
+
+.icon-button svg {
+  width: 19px;
+  height: 19px;
+}
+
 .solid-button {
   background: linear-gradient(135deg, var(--accent-strong), #efad67);
   color: #1d120f;
@@ -210,12 +255,14 @@ input {
 }
 
 .ghost-button:hover,
+.icon-button:hover,
 .solid-button:hover,
 .list-row:hover {
   transform: translateY(-1px);
 }
 
 .ghost-button:disabled,
+.icon-button:disabled,
 .solid-button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -250,6 +297,33 @@ input {
 
 .list-row.active {
   background: linear-gradient(135deg, rgba(217, 106, 65, 0.22), rgba(139, 222, 195, 0.14));
+}
+
+.filter-shell {
+  position: relative;
+}
+
+.filter-shell .filter-input {
+  padding-right: 42px;
+}
+
+.filter-clear-button {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid rgba(246, 243, 234, 0.12);
+  background: rgba(12, 15, 18, 0.92);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.filter-clear-button:hover {
+  border-color: rgba(139, 222, 195, 0.26);
+  color: var(--text);
 }
 
 .list-select {
@@ -292,7 +366,7 @@ input {
 }
 
 .drop-gap {
-  min-height: 2px;
+  height: 5px;
   border-radius: 999px;
   border: 1px dashed transparent;
   background: transparent;
@@ -311,7 +385,7 @@ input {
 }
 
 .drop-gap.active {
-  min-height: 24px;
+  min-height: 30px;
   border-color: rgba(139, 222, 195, 0.65);
   background: rgba(139, 222, 195, 0.2);
   color: var(--accent);
@@ -329,8 +403,18 @@ input {
   cursor: grab;
 }
 
+.setlist-row:hover {
+  border-color: rgba(139, 222, 195, 0.24);
+  background: rgba(24, 32, 38, 0.82);
+}
+
 .setlist-row.dragging {
   opacity: 0.45;
+}
+
+.setlist-row.replace-target {
+  border-color: rgba(217, 106, 65, 0.6);
+  background: rgba(217, 106, 65, 0.16);
 }
 
 .slot-label {
@@ -355,22 +439,6 @@ input {
 }
 
 .remove-button:hover {
-  border-color: rgba(241, 138, 122, 0.3);
-  color: #ffd7d1;
-}
-
-.delete-button {
-  border: 1px solid rgba(246, 243, 234, 0.1);
-  background: rgba(12, 15, 18, 0.88);
-  color: var(--muted);
-  width: 26px;
-  height: 26px;
-  border-radius: 999px;
-  cursor: pointer;
-  flex: 0 0 auto;
-}
-
-.delete-button:hover {
   border-color: rgba(241, 138, 122, 0.3);
   color: #ffd7d1;
 }
@@ -405,6 +473,23 @@ input {
   color: var(--muted);
 }
 
+.drag-preview {
+  position: fixed;
+  z-index: 60;
+  pointer-events: none;
+  max-width: 260px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(139, 222, 195, 0.24);
+  background: rgba(12, 15, 18, 0.94);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font-size: 0.86rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 @keyframes shell-in {
   from {
     opacity: 0;
@@ -423,7 +508,7 @@ input {
   }
 
   .sidebar {
-    grid-template-rows: auto 300px minmax(300px, 1fr);
+    grid-template-rows: 300px minmax(300px, 1fr);
   }
 
   .hero {

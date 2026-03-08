@@ -13,7 +13,8 @@ export interface SetlistDraftLike {
 }
 
 export interface LoadedPresetData {
-  relativePath: string;
+  absolutePath?: string;
+  relativePath?: string;
   name: string;
   slotData: Record<string, unknown>;
 }
@@ -95,6 +96,23 @@ export function removePresetFromSetlistDraft(draft: SetlistDraftLike, removeInde
 
   presets.splice(normalizedRemove, 1);
   presets.push(createBlankPreset());
+
+  return setPresetsArray(draft, presets.slice(0, PRESET_SLOT_COUNT));
+}
+
+export function replacePresetInSetlistDraft(
+  draft: SetlistDraftLike,
+  preset: LoadedPresetData,
+  replaceIndex: number,
+): SetlistDraftLike {
+  const presets = getPresetsArray(draft);
+  const normalizedReplace = Math.max(0, Math.min(replaceIndex, PRESET_SLOT_COUNT - 1));
+
+  while (presets.length < PRESET_SLOT_COUNT) {
+    presets.push(createBlankPreset());
+  }
+
+  presets[normalizedReplace] = clone(preset.slotData);
 
   return setPresetsArray(draft, presets.slice(0, PRESET_SLOT_COUNT));
 }

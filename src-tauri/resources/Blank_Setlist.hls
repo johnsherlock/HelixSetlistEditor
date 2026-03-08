@@ -1,0 +1,20 @@
+{
+  "schema": "L6Setlist",
+  "version": 2,
+  "encoding": "Base64",
+  "meta": {
+    "build_sha": "7d01f5e",
+    "device": 2162689,
+    "device_version": 58720256,
+    "modifieddate": 1772817920,
+    "application": "HX Edit",
+    "name": "Blank Setlist",
+    "appversion": 58851328
+  },
+  "encoded_data": "eJyrVspNLUlUsqpWykvMTVWyUnLKSczLVghOLcnJLC5RqtVRKihKLU4tKVayiq6u1RlFA4diawFZR6Gl",
+  "compression": {
+    "crc32": 485607002,
+    "decompressed_size": 429,
+    "type": "zlib"
+  }
+}

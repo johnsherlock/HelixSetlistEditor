@@ -1,30 +1,55 @@
-import { type DragEvent, useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 import {
   getPresetNames,
   insertPresetIntoSetlistDraft,
   movePresetWithinSetlistDraft,
   PRESET_SLOT_COUNT,
+  replacePresetInSetlistDraft,
   removePresetFromSetlistDraft,
 } from "../../src/domain/index.js";
-import { deleteSetlist, fetchPresets, fetchSetlists, loadPreset, loadSetlist, saveSetlist } from "./api";
-import type { LibraryEntry, SetlistDraft } from "./types";
+import {
+  listPresets,
+  listSetlists,
+  loadAppSettings,
+  loadBlankTemplate,
+  loadPreset,
+  loadSetlist,
+  pickPresetDirectory,
+  pickSetlistDirectory,
+  saveAppSettings,
+  saveSetlist,
+  saveSetlistAs,
+} from "./api";
+import type { AppSettings, LibraryEntry, SetlistDraft } from "./types";
 
-const DEFAULT_HOME_DIR = "/Users/john/Documents/Line 6/Tones/Helix";
-const LOCAL_STORAGE_HOME_KEY = "helix-setlist-home-dir";
-const NEW_SETLIST_TEMPLATE_PATH = "Blank Setlist.hls";
 const NEW_SETLIST_DEFAULT_NAME = "New Setlist";
 
 type PendingAction =
-  | { kind: "switch-setlist"; relativePath: string }
+  | { kind: "switch-setlist"; absolutePath: string }
   | { kind: "new-draft" }
   | null;
+type PendingReplace = {
+  slotIndex: number;
+  existingPresetName: string;
+  incomingPresetName: string;
+  preset: {
+    absolutePath: string;
+    name: string;
+    slotData: Record<string, unknown>;
+  };
+} | null;
 
-type SaveAsReason = "manual" | "switch";
 type DragSource =
-  | { kind: "library-preset"; relativePath: string }
+  | { kind: "library-preset"; absolutePath: string }
   | { kind: "setlist-row"; index: number }
   | null;
+type DropTarget = { kind: "insert" | "replace"; index: number } | null;
+type DragPointerState = {
+  x: number;
+  y: number;
+  label: string;
+} | null;
 
 function createSlotLabels(): string[] {
   const labels = ["A", "B", "C", "D"];
@@ -47,6 +72,45 @@ function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
 }
 
+function getFileName(absolutePath: string | null | undefined): string | null {
+  if (!absolutePath) {
+    return null;
+  }
+
+  return absolutePath.split(/[\\/]/).pop() ?? absolutePath;
+}
+
+function getDirectoryName(absolutePath: string): string | null {
+  const normalized = absolutePath.replace(/[\\/]+$/, "");
+  const lastSeparator = Math.max(normalized.lastIndexOf("/"), normalized.lastIndexOf("\\"));
+
+  if (lastSeparator <= 0) {
+    return null;
+  }
+
+  return normalized.slice(0, lastSeparator);
+}
+
+function stripExtension(fileName: string | null | undefined): string {
+  return (fileName ?? "Untitled Setlist").replace(/\.[^.]+$/, "");
+}
+
+function sanitizeFileNameSegment(value: string): string {
+  const normalized = value.trim().replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ");
+  return normalized || NEW_SETLIST_DEFAULT_NAME;
+}
+
+function buildSuggestedSetlistFileName(draft: SetlistDraft | null, activePath: string | null): string {
+  const explicitFileName = getFileName(activePath);
+
+  if (explicitFileName) {
+    return explicitFileName.toLowerCase().endsWith(".hls") ? explicitFileName : `${explicitFileName}.hls`;
+  }
+
+  const setlistName = sanitizeFileNameSegment(getSetlistName(draft));
+  return setlistName.toLowerCase().endsWith(".hls") ? setlistName : `${setlistName}.hls`;
+}
+
 function getSetlistName(draft: SetlistDraft | null): string {
   if (!draft) {
     return "No Setlist Loaded";
@@ -64,7 +128,7 @@ function getSetlistName(draft: SetlistDraft | null): string {
     return outerMeta.name;
   }
 
-  return draft.sourcePath?.replace(/\.hls$/i, "") ?? "Untitled Setlist";
+  return stripExtension(getFileName(draft.sourcePath));
 }
 
 function setSetlistName(draft: SetlistDraft, name: string): SetlistDraft {
@@ -82,22 +146,32 @@ function setSetlistName(draft: SetlistDraft, name: string): SetlistDraft {
   return nextDraft;
 }
 
-async function saveDraft(args: {
-  homeDir: string;
-  relativePath: string;
-  draft: SetlistDraft;
-  overwrite: boolean;
-}): Promise<void> {
-  await saveSetlist({
-    homeDir: args.homeDir,
-    relativePath: args.relativePath,
-    draft: args.draft,
-    overwrite: args.overwrite,
-  });
+function FolderOpenIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M3.75 6.75A2.25 2.25 0 0 1 6 4.5h4.05c.5 0 .97.21 1.29.59l1.32 1.57c.1.12.25.19.41.19H18A2.25 2.25 0 0 1 20.25 9v7.5A2.25 2.25 0 0 1 18 18.75H6A2.25 2.25 0 0 1 3.75 16.5v-9.75Z"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M8.25 12.75 10.5 15l5.25-5.25"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.5"
+      />
+    </svg>
+  );
 }
 
 export function App() {
-  const [homeDir, setHomeDir] = useState(() => localStorage.getItem(LOCAL_STORAGE_HOME_KEY) ?? DEFAULT_HOME_DIR);
+  const [setlistDirectory, setSetlistDirectory] = useState<string | null>(null);
+  const [presetDirectory, setPresetDirectory] = useState<string | null>(null);
   const [setlists, setSetlists] = useState<LibraryEntry[]>([]);
   const [presets, setPresets] = useState<LibraryEntry[]>([]);
   const [presetFilter, setPresetFilter] = useState("");
@@ -106,14 +180,14 @@ export function App() {
   const [dirty, setDirty] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
+  const [pendingReplace, setPendingReplace] = useState<PendingReplace>(null);
   const [showUnsavedModal, setShowUnsavedModal] = useState(false);
-  const [showSaveAsModal, setShowSaveAsModal] = useState(false);
-  const [saveAsReason, setSaveAsReason] = useState<SaveAsReason>("manual");
-  const [saveAsInput, setSaveAsInput] = useState("");
   const [dragSource, setDragSource] = useState<DragSource>(null);
-  const [activeDropIndex, setActiveDropIndex] = useState<number | null>(null);
+  const [activeDropTarget, setActiveDropTarget] = useState<DropTarget>(null);
+  const [dragPointer, setDragPointer] = useState<DragPointerState>(null);
 
   const filteredPresets = useMemo(() => {
     const query = presetFilter.trim().toLowerCase();
@@ -132,51 +206,116 @@ export function App() {
     pendingAction?.kind === "new-draft"
       ? "Save, save as a copy, or discard edits before creating a new setlist draft."
       : "Save, save as a copy, or discard edits before loading another setlist.";
-
-  useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_HOME_KEY, homeDir);
-  }, [homeDir]);
+  const fullPathLabel = activePath ?? "Unsaved setlist. Click Save to choose a file location.";
 
   useEffect(() => {
     document.title = title;
   }, [title]);
 
   useEffect(() => {
-    void refreshLibrary(true);
+    let cancelled = false;
+
+    void (async () => {
+      setLoading(true);
+      try {
+        const settings = await loadAppSettings();
+
+        if (cancelled) {
+          return;
+        }
+
+        setSetlistDirectory(settings.setlistDirectory ?? null);
+        setPresetDirectory(settings.presetDirectory ?? null);
+      } finally {
+        if (!cancelled) {
+          setSettingsLoaded(true);
+          setLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  async function refreshLibrary(autoSelectFirst: boolean): Promise<void> {
+  useEffect(() => {
+    if (!settingsLoaded) {
+      return;
+    }
+
+    void saveAppSettings({
+      setlistDirectory: setlistDirectory ?? undefined,
+      presetDirectory: presetDirectory ?? undefined,
+    } satisfies AppSettings);
+  }, [presetDirectory, setlistDirectory, settingsLoaded]);
+
+  useEffect(() => {
+    if (!settingsLoaded) {
+      return;
+    }
+
+    void refreshSetlists(!activePath && !draft, setlistDirectory);
+  }, [setlistDirectory, settingsLoaded]);
+
+  useEffect(() => {
+    if (!settingsLoaded) {
+      return;
+    }
+
+    void refreshPresets(presetDirectory);
+  }, [presetDirectory, settingsLoaded]);
+
+  async function refreshSetlists(autoSelectFirst: boolean, directory: string | null): Promise<void> {
+    if (!directory) {
+      setSetlists([]);
+      return;
+    }
+
     setLoading(true);
     setErrorMessage(null);
 
     try {
-      const [nextSetlists, nextPresets] = await Promise.all([fetchSetlists(homeDir), fetchPresets(homeDir)]);
+      const nextSetlists = await listSetlists(directory);
 
       setSetlists(nextSetlists);
-      setPresets(nextPresets);
 
-      if (!activePath && autoSelectFirst && nextSetlists[0]) {
-        await loadIntoEditor(nextSetlists[0].relativePath);
-      } else if (activePath && !nextSetlists.some((entry) => entry.relativePath === activePath)) {
-        setActivePath(null);
-        setDraft(null);
-        setDirty(false);
+      if (autoSelectFirst && nextSetlists[0]) {
+        await loadIntoEditor(nextSetlists[0].absolutePath);
       }
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Failed to load Helix library.");
+      setErrorMessage(error instanceof Error ? error.message : "Failed to load setlists.");
     } finally {
       setLoading(false);
     }
   }
 
-  async function loadIntoEditor(relativePath: string): Promise<void> {
+  async function refreshPresets(directory: string | null): Promise<void> {
+    if (!directory) {
+      setPresets([]);
+      return;
+    }
+
     setLoading(true);
     setErrorMessage(null);
 
     try {
-      const response = await loadSetlist(homeDir, relativePath);
+      setPresets(await listPresets(directory));
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to load presets.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadIntoEditor(absolutePath: string): Promise<void> {
+    setLoading(true);
+    setErrorMessage(null);
+
+    try {
+      const response = await loadSetlist(absolutePath);
       setDraft(cloneDraft(response.draft));
-      setActivePath(relativePath);
+      setActivePath(absolutePath);
       setDirty(false);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Failed to load the selected setlist.");
@@ -190,8 +329,7 @@ export function App() {
     setErrorMessage(null);
 
     try {
-      const response = await loadSetlist(homeDir, NEW_SETLIST_TEMPLATE_PATH);
-      const nextDraft = setSetlistName(cloneDraft(response.draft), NEW_SETLIST_DEFAULT_NAME);
+      const nextDraft = setSetlistName(await loadBlankTemplate(), NEW_SETLIST_DEFAULT_NAME);
 
       nextDraft.sourcePath = undefined;
 
@@ -200,75 +338,40 @@ export function App() {
       setDirty(true);
       setPendingAction(null);
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : `Failed to create a new setlist from ${NEW_SETLIST_TEMPLATE_PATH}.`,
-      );
+      setErrorMessage(error instanceof Error ? error.message : "Failed to create a new setlist.");
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleDeleteSetlist(relativePath: string): Promise<void> {
-    const deletingActive = relativePath === activePath;
-    const deletingDirtyActive = deletingActive && dirty;
-    const confirmationMessage = deletingDirtyActive
-      ? `Delete ${relativePath} from disk? This will also discard the current unsaved edits in the editor.`
-      : `Delete ${relativePath} from disk?`;
+  async function handlePickSetlistDirectory(): Promise<void> {
+    const selectedDirectory = await pickSetlistDirectory();
 
-    if (!window.confirm(confirmationMessage)) {
-      return;
-    }
-
-    setLoading(true);
-    setErrorMessage(null);
-    console.info("[helix-ui] delete requested", {
-      homeDir,
-      relativePath,
-      deletingActive,
-      dirty,
-    });
-
-    try {
-      await deleteSetlist(homeDir, relativePath);
-      const nextSetlists = await fetchSetlists(homeDir);
-
-      setSetlists(nextSetlists);
-
-      if (deletingActive) {
-        setActivePath(null);
-        setDraft(null);
-        setDirty(false);
-
-        if (nextSetlists[0]) {
-          await loadIntoEditor(nextSetlists[0].relativePath);
-        }
-      }
-    } catch (error) {
-      console.error("[helix-ui] delete failed", {
-        homeDir,
-        relativePath,
-        error,
-      });
-      setErrorMessage(error instanceof Error ? error.message : "Failed to delete setlist.");
-    } finally {
-      setLoading(false);
+    if (selectedDirectory) {
+      setSetlistDirectory(selectedDirectory);
     }
   }
 
-  function handleSelectSetlist(relativePath: string): void {
-    if (relativePath === activePath) {
+  async function handlePickPresetDirectory(): Promise<void> {
+    const selectedDirectory = await pickPresetDirectory();
+
+    if (selectedDirectory) {
+      setPresetDirectory(selectedDirectory);
+    }
+  }
+
+  function handleSelectSetlist(absolutePath: string): void {
+    if (absolutePath === activePath) {
       return;
     }
 
     if (dirty) {
-      setPendingAction({ kind: "switch-setlist", relativePath });
+      setPendingAction({ kind: "switch-setlist", absolutePath });
       setShowUnsavedModal(true);
       return;
     }
 
-    void loadIntoEditor(relativePath);
+    void loadIntoEditor(absolutePath);
   }
 
   function handleNameChange(name: string): void {
@@ -276,51 +379,81 @@ export function App() {
       return;
     }
 
-    setDraft(setSetlistName(draft, name));
+    setDraft(setSetlistName(draft, name.slice(0, 17)));
     setDirty(true);
   }
 
-  function handlePresetDragStart(relativePath: string): void {
-    setDragSource({ kind: "library-preset", relativePath });
+  function beginPointerDrag(source: DragSource, clientX: number, clientY: number, label: string): void {
+    if (!source) {
+      return;
+    }
+
+    setDragSource(source);
+    setDragPointer({
+      x: clientX,
+      y: clientY,
+      label,
+    });
+    setActiveDropTarget(null);
   }
 
-  function handleSetlistRowDragStart(index: number): void {
-    setDragSource({ kind: "setlist-row", index });
-  }
-
-  function handleDragEnd(): void {
-    setDragSource(null);
-    setActiveDropIndex(null);
-  }
-
-  function handleInsertDragOver(event: DragEvent<HTMLDivElement>, insertIndex: number): void {
-    if (!draft || !dragSource) {
+  function handlePresetPointerDown(event: React.PointerEvent<HTMLDivElement>, absolutePath: string): void {
+    if (event.button !== 0) {
       return;
     }
 
     event.preventDefault();
-    setActiveDropIndex(insertIndex);
+    beginPointerDrag(
+      { kind: "library-preset", absolutePath },
+      event.clientX,
+      event.clientY,
+      stripExtension(getFileName(absolutePath) ?? absolutePath),
+    );
   }
 
-  async function handleDrop(event: DragEvent<HTMLDivElement>, insertIndex: number): Promise<void> {
-    event.preventDefault();
+  function handleSetlistRowPointerDown(event: React.PointerEvent<HTMLDivElement>, index: number): void {
+    if (event.button !== 0) {
+      return;
+    }
 
-    if (!draft || !dragSource) {
-      setActiveDropIndex(null);
+    event.preventDefault();
+    beginPointerDrag(
+      { kind: "setlist-row", index },
+      event.clientX,
+      event.clientY,
+      presetNames[index]?.trim() || slotLabels[index],
+    );
+  }
+
+  function handleDragEnd(): void {
+    setDragSource(null);
+    setActiveDropTarget(null);
+    setDragPointer(null);
+  }
+
+  function setInsertTarget(insertIndex: number): void {
+    setActiveDropTarget({ kind: "insert", index: insertIndex });
+  }
+
+  function setReplaceTarget(replaceIndex: number): void {
+    setActiveDropTarget({ kind: "replace", index: replaceIndex });
+  }
+
+  async function applyInsertDrop(source: Exclude<DragSource, null>, insertIndex: number): Promise<void> {
+    if (!draft) {
+      handleDragEnd();
       return;
     }
 
     try {
       setErrorMessage(null);
 
-      if (dragSource.kind === "library-preset") {
+      if (source.kind === "library-preset") {
         const effectiveInsertIndex = Math.min(insertIndex, PRESET_SLOT_COUNT - 1);
         const lastPresetName = presetNames[PRESET_SLOT_COUNT - 1]?.trim();
 
         if (lastPresetName) {
-          const confirmed = window.confirm(
-            `Inserting here will drop slot 32D (${lastPresetName}). Continue?`,
-          );
+          const confirmed = window.confirm(`Inserting here will drop slot 32D (${lastPresetName}). Continue?`);
 
           if (!confirmed) {
             return;
@@ -328,11 +461,11 @@ export function App() {
         }
 
         setLoading(true);
-        const loadedPreset = await loadPreset(homeDir, dragSource.relativePath);
+        const loadedPreset = await loadPreset(source.absolutePath);
         const { nextDraft, droppedPresetName, truncatedExistingPreset } = insertPresetIntoSetlistDraft(
           draft,
           {
-            relativePath: loadedPreset.file.relativePath,
+            absolutePath: loadedPreset.file.absolutePath,
             name: loadedPreset.preset.name ?? loadedPreset.file.name,
             slotData: loadedPreset.preset.slotData,
           },
@@ -348,41 +481,195 @@ export function App() {
         return;
       }
 
-      if (dragSource.index === insertIndex || dragSource.index + 1 === insertIndex) {
+      if (source.index === insertIndex || source.index + 1 === insertIndex) {
         return;
       }
 
-      const nextDraft = movePresetWithinSetlistDraft(draft, dragSource.index, insertIndex);
-
-      setDraft(nextDraft as SetlistDraft);
+      setDraft(movePresetWithinSetlistDraft(draft, source.index, insertIndex) as SetlistDraft);
       setDirty(true);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Failed to update the setlist.");
     } finally {
       setLoading(false);
-      setActiveDropIndex(null);
-      setDragSource(null);
+      handleDragEnd();
     }
   }
+
+  async function applyReplaceDrop(source: Extract<DragSource, { kind: "library-preset" }>, replaceIndex: number): Promise<void> {
+    if (!draft) {
+      handleDragEnd();
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setErrorMessage(null);
+
+      const loadedPreset = await loadPreset(source.absolutePath);
+      const existingPresetName = presetNames[replaceIndex]?.trim();
+      const incomingPresetName = loadedPreset.preset.name ?? loadedPreset.file.name;
+
+      const loadedPresetData = {
+        absolutePath: loadedPreset.file.absolutePath,
+        name: incomingPresetName,
+        slotData: loadedPreset.preset.slotData,
+      };
+
+      if (existingPresetName) {
+        setPendingReplace({
+          slotIndex: replaceIndex,
+          existingPresetName,
+          incomingPresetName,
+          preset: loadedPresetData,
+        });
+        return;
+      }
+
+      const nextDraft = replacePresetInSetlistDraft(
+        draft,
+        loadedPresetData,
+        replaceIndex,
+      );
+
+      setDraft(nextDraft as SetlistDraft);
+      setDirty(true);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to replace the preset.");
+    } finally {
+      setLoading(false);
+      handleDragEnd();
+    }
+  }
+
+  function handleConfirmReplace(): void {
+    if (!draft || !pendingReplace) {
+      setPendingReplace(null);
+      return;
+    }
+
+    setDraft(replacePresetInSetlistDraft(draft, pendingReplace.preset, pendingReplace.slotIndex) as SetlistDraft);
+    setDirty(true);
+    setPendingReplace(null);
+  }
+
+  function handleCancelReplace(): void {
+    setPendingReplace(null);
+  }
+
+  function resolveDropTarget(clientX: number, clientY: number, source: Exclude<DragSource, null>): DropTarget {
+    const element = document.elementFromPoint(clientX, clientY);
+
+    if (!(element instanceof Element)) {
+      return null;
+    }
+
+    const targetElement = element.closest<HTMLElement>("[data-drop-kind]");
+
+    if (!targetElement) {
+      return null;
+    }
+
+    const kind = targetElement.dataset.dropKind;
+    const index = Number.parseInt(targetElement.dataset.dropIndex ?? "", 10);
+
+    if (!Number.isFinite(index)) {
+      return null;
+    }
+
+    if (kind === "replace" && source.kind !== "library-preset") {
+      return null;
+    }
+
+    if (kind === "insert" || kind === "replace") {
+      return { kind, index };
+    }
+
+    return null;
+  }
+
+  useEffect(() => {
+    if (!dragSource) {
+      return;
+    }
+
+    const currentSource = dragSource;
+
+    function handlePointerMove(event: PointerEvent): void {
+      setDragPointer((previous) =>
+        previous
+          ? {
+              ...previous,
+              x: event.clientX,
+              y: event.clientY,
+            }
+          : previous,
+      );
+
+      const target = resolveDropTarget(event.clientX, event.clientY, currentSource);
+
+      if (!target) {
+        setActiveDropTarget(null);
+        return;
+      }
+
+      if (target.kind === "insert") {
+        setInsertTarget(target.index);
+        return;
+      }
+
+      setReplaceTarget(target.index);
+    }
+
+    function handlePointerUp(event: PointerEvent): void {
+      const target = resolveDropTarget(event.clientX, event.clientY, currentSource);
+
+      if (!target) {
+        handleDragEnd();
+        return;
+      }
+
+      if (target.kind === "insert") {
+        void applyInsertDrop(currentSource, target.index);
+        return;
+      }
+
+      if (currentSource.kind === "library-preset") {
+        void applyReplaceDrop(currentSource, target.index);
+        return;
+      }
+
+      handleDragEnd();
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+  }, [dragSource, presetNames, slotLabels, draft]);
 
   function handleRemovePreset(index: number): void {
     if (!draft) {
       return;
     }
 
-    const nextDraft = removePresetFromSetlistDraft(draft, index);
-
-    setDraft(nextDraft as SetlistDraft);
+    setDraft(removePresetFromSetlistDraft(draft, index) as SetlistDraft);
     setDirty(true);
     setErrorMessage(null);
   }
 
   async function handleSave(): Promise<boolean> {
-    if (!draft || !activePath) {
+    if (!draft) {
       return false;
     }
 
-    if (!window.confirm(`Overwrite ${activePath}?`)) {
+    if (!activePath) {
+      return handleSaveAsCopy("manual");
+    }
+
+    if (!window.confirm(`Overwrite ${getFileName(activePath)}?`)) {
       return false;
     }
 
@@ -390,109 +677,16 @@ export function App() {
     setErrorMessage(null);
 
     try {
-      await saveDraft({
-        homeDir,
-        relativePath: activePath,
+      await saveSetlist({
+        absolutePath: activePath,
         draft,
         overwrite: true,
       });
       setDirty(false);
-      await refreshLibrary(false);
       return true;
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Failed to save the active setlist.");
       return false;
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  function beginSaveAs(reason: SaveAsReason): void {
-    const baseName = activePath?.replace(/\.hls$/i, "") || getSetlistName(draft).trim() || "Untitled Setlist";
-
-    setSaveAsReason(reason);
-    setSaveAsInput(`${baseName} Copy.hls`);
-    if (reason === "switch") {
-      setShowUnsavedModal(false);
-    }
-    setShowSaveAsModal(true);
-  }
-
-  async function handleSaveAsConfirm(): Promise<void> {
-    if (!draft) {
-      return;
-    }
-
-    const trimmed = saveAsInput.trim();
-
-    if (!trimmed) {
-      setErrorMessage("Save as copy requires a file name.");
-      return;
-    }
-
-    const relativePath = trimmed.toLowerCase().endsWith(".hls") ? trimmed : `${trimmed}.hls`;
-
-    setSaving(true);
-    setErrorMessage(null);
-
-    try {
-      await saveDraft({
-        homeDir,
-        relativePath,
-        draft,
-        overwrite: false,
-      });
-
-      setShowSaveAsModal(false);
-      setActivePath(relativePath);
-      setDraft({
-        ...cloneDraft(draft),
-        sourcePath: relativePath,
-      });
-      setDirty(false);
-      await refreshLibrary(false);
-
-      if (saveAsReason === "switch") {
-        await continuePendingActionAfterSave();
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to save a copy.";
-
-      if (message.includes("Refusing to overwrite existing file")) {
-        if (!window.confirm(`${relativePath} already exists. Replace it?`)) {
-          setSaving(false);
-          if (saveAsReason === "switch") {
-            setShowUnsavedModal(true);
-          }
-          return;
-        }
-
-        try {
-          await saveDraft({
-            homeDir,
-            relativePath,
-            draft,
-            overwrite: true,
-          });
-
-          setShowSaveAsModal(false);
-          setActivePath(relativePath);
-          setDraft({
-            ...cloneDraft(draft),
-            sourcePath: relativePath,
-          });
-          setDirty(false);
-          await refreshLibrary(false);
-
-          if (saveAsReason === "switch") {
-            await continuePendingActionAfterSave();
-          }
-        } catch (overwriteError) {
-          setErrorMessage(overwriteError instanceof Error ? overwriteError.message : "Failed to replace setlist copy.");
-        }
-      } else {
-        setErrorMessage(message);
-      }
     } finally {
       setSaving(false);
     }
@@ -508,7 +702,7 @@ export function App() {
     setShowUnsavedModal(false);
 
     if (action.kind === "switch-setlist") {
-      await loadIntoEditor(action.relativePath);
+      await loadIntoEditor(action.absolutePath);
       return;
     }
 
@@ -525,7 +719,7 @@ export function App() {
     }
 
     if (action.kind === "switch-setlist") {
-      void loadIntoEditor(action.relativePath);
+      void loadIntoEditor(action.absolutePath);
       return;
     }
 
@@ -542,80 +736,139 @@ export function App() {
     void createNewDraftFromTemplate();
   }
 
+  async function handleSaveAsCopy(reason: "manual" | "switch" = "manual"): Promise<boolean> {
+    if (!draft) {
+      return false;
+    }
+
+    setSaving(true);
+    setErrorMessage(null);
+
+    try {
+      const savedFile = await saveSetlistAs({
+        draft,
+        suggestedFileName: buildSuggestedSetlistFileName(draft, activePath),
+        initialDirectory: setlistDirectory ?? getDirectoryName(activePath ?? "") ?? null,
+      });
+
+      if (!savedFile) {
+        return false;
+      }
+
+      const nextPath = savedFile.absolutePath;
+      const nextDirectory = getDirectoryName(nextPath);
+      const nextDraft = {
+        ...cloneDraft(draft),
+        sourcePath: nextPath,
+      };
+
+      setActivePath(nextPath);
+      setDraft(nextDraft);
+      setDirty(false);
+
+      if (nextDirectory && nextDirectory !== setlistDirectory) {
+        setSetlistDirectory(nextDirectory);
+      } else if (setlistDirectory) {
+        await refreshSetlists(false, setlistDirectory);
+      }
+
+      if (reason === "switch") {
+        await continuePendingActionAfterSave();
+      }
+
+      return true;
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to save a copy.");
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="shell">
       <aside className="sidebar">
-        <div className="panel">
-          <label className="field-label" htmlFor="home-dir">
-            Home Directory
-          </label>
-          <div className="home-dir-row">
-            <input
-              id="home-dir"
-              className="text-input"
-              value={homeDir}
-              onChange={(event) => setHomeDir(event.target.value)}
-              placeholder="/Users/john/Documents/Line 6/Tones/Helix"
-            />
-            <button className="ghost-button" onClick={() => void refreshLibrary(true)} disabled={loading}>
-              Load
-            </button>
-          </div>
-        </div>
-
         <section className="panel list-panel setlists-panel">
           <div className="panel-header">
-            <h2>Setlists</h2>
-            <span>{setlists.length}</span>
+            <div className="panel-header-main">
+              <h2>Setlists</h2>
+              <span>{setlists.length}</span>
+            </div>
+            <button
+              className="icon-button"
+              onClick={() => void handlePickSetlistDirectory()}
+              disabled={loading}
+              type="button"
+              aria-label="Select setlist directory"
+              title={setlistDirectory ?? "Select setlist directory"}
+            >
+              <FolderOpenIcon />
+            </button>
           </div>
           <div className="scroll-region">
             {setlists.map((entry) => (
-              <div key={entry.relativePath} className={`list-row ${entry.relativePath === activePath ? "active" : ""}`}>
-                <button className="list-select" onClick={() => handleSelectSetlist(entry.relativePath)}>
+              <div key={entry.absolutePath} className={`list-row ${entry.absolutePath === activePath ? "active" : ""}`}>
+                <button className="list-select" onClick={() => handleSelectSetlist(entry.absolutePath)}>
                   <span>{entry.name}</span>
-                  {dirty && entry.relativePath === activePath ? <strong>*</strong> : null}
-                </button>
-                <button
-                  className="delete-button"
-                  type="button"
-                  aria-label={`Delete ${entry.name}`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void handleDeleteSetlist(entry.relativePath);
-                  }}
-                >
-                  x
+                  <span>{dirty && entry.absolutePath === activePath ? "*" : ""}</span>
                 </button>
               </div>
             ))}
-            {!setlists.length ? <p className="empty-state">No setlists found in /Setlists.</p> : null}
+            {!setlistDirectory ? (
+              <p className="empty-state">Select a setlist directory to browse existing setlists. This is optional if you only want to create a new setlist.</p>
+            ) : null}
+            {setlistDirectory && !setlists.length ? <p className="empty-state">No setlists found in the selected directory.</p> : null}
           </div>
         </section>
 
         <section className="panel list-panel">
           <div className="panel-header">
-            <h2>Presets</h2>
-            <span>{filteredPresets.length}</span>
+            <div className="panel-header-main">
+              <h2>Presets</h2>
+              <span>{filteredPresets.length}</span>
+            </div>
+            <button
+              className="icon-button"
+              onClick={() => void handlePickPresetDirectory()}
+              disabled={loading}
+              type="button"
+              aria-label="Select preset directory"
+              title={presetDirectory ?? "Select preset directory"}
+            >
+              <FolderOpenIcon />
+            </button>
           </div>
-          <input
-            className="text-input filter-input"
-            value={presetFilter}
-            onChange={(event) => setPresetFilter(event.target.value)}
-            placeholder="Filter presets"
-          />
+          <div className="filter-shell">
+            <input
+              className="text-input filter-input"
+              value={presetFilter}
+              onChange={(event) => setPresetFilter(event.target.value)}
+              placeholder="Filter presets"
+              disabled={!presetDirectory}
+            />
+            {presetFilter ? (
+              <button
+                className="filter-clear-button"
+                type="button"
+                aria-label="Clear preset filter"
+                onClick={() => setPresetFilter("")}
+              >
+                x
+              </button>
+            ) : null}
+          </div>
           <div className="scroll-region">
             {filteredPresets.map((entry) => (
               <div
-                key={entry.relativePath}
-                className={`preset-row ${dragSource?.kind === "library-preset" && dragSource.relativePath === entry.relativePath ? "dragging" : ""}`}
-                draggable
-                onDragStart={() => handlePresetDragStart(entry.relativePath)}
-                onDragEnd={handleDragEnd}
+                key={entry.absolutePath}
+                className={`preset-row ${dragSource?.kind === "library-preset" && dragSource.absolutePath === entry.absolutePath ? "dragging" : ""}`}
+                onPointerDown={(event) => handlePresetPointerDown(event, entry.absolutePath)}
               >
                 <span>{entry.name}</span>
               </div>
             ))}
-            {!filteredPresets.length ? <p className="empty-state">No presets match the current filter.</p> : null}
+            {!presetDirectory ? <p className="empty-state">Select a preset directory to browse preset files.</p> : null}
+            {presetDirectory && !filteredPresets.length ? <p className="empty-state">No presets match the current filter.</p> : null}
           </div>
         </section>
       </aside>
@@ -623,17 +876,16 @@ export function App() {
       <main className="workspace">
         <header className="hero">
           <div>
-            <p className="eyebrow">Local library shell</p>
             <h1>Helix Setlist Editor</h1>
           </div>
           <div className="action-row">
             <button className="ghost-button" onClick={handleNew} disabled={saving}>
               New
             </button>
-            <button className="ghost-button" onClick={() => void handleSave()} disabled={!draft || !activePath || saving}>
+            <button className="ghost-button" onClick={() => void handleSave()} disabled={!draft || saving}>
               Save
             </button>
-            <button className="ghost-button" onClick={() => beginSaveAs("manual")} disabled={!draft || saving}>
+            <button className="ghost-button" onClick={() => void handleSaveAsCopy("manual")} disabled={!draft || !activePath || saving}>
               Save as Copy
             </button>
           </div>
@@ -643,18 +895,25 @@ export function App() {
 
         <section className="editor-panel">
           <div className="title-row">
+            <label className="field-label title-label" htmlFor="setlist-name-input">
+              Setlist Name
+            </label>
             <input
+              id="setlist-name-input"
               className="title-input"
               value={getSetlistName(draft)}
               onChange={(event) => handleNameChange(event.target.value)}
               disabled={!draft}
               placeholder="Setlist name"
+              maxLength={17}
             />
+            <span className="path-label" title={fullPathLabel}>
+              {fullPathLabel}
+            </span>
             <span className="dirty-indicator">{dirty ? "*" : ""}</span>
           </div>
 
           <div className="status-row">
-            <span>{activePath ?? "No file selected"}</span>
             <span>{loading ? "Loading..." : `${presetNames.filter(Boolean).length} named presets`}</span>
           </div>
 
@@ -662,17 +921,19 @@ export function App() {
             {presetNames.map((name, index) => (
               <div key={slotLabels[index]} className="setlist-slot">
                 <div
-                  className={`drop-gap ${activeDropIndex === index ? "active" : ""} ${dragSource ? "visible" : ""}`}
-                  onDragOver={(event) => handleInsertDragOver(event, index)}
-                  onDrop={(event) => void handleDrop(event, index)}
+                  className={`drop-gap ${activeDropTarget?.kind === "insert" && activeDropTarget.index === index ? "active" : ""} ${dragSource ? "visible" : ""}`}
+                  data-testid={`insert-gap-${index}`}
+                  data-drop-kind="insert"
+                  data-drop-index={index}
                 >
                   <span>Insert here</span>
                 </div>
                 <div
-                  className={`setlist-row ${dragSource?.kind === "setlist-row" && dragSource.index === index ? "dragging" : ""}`}
-                  draggable
-                  onDragStart={() => handleSetlistRowDragStart(index)}
-                  onDragEnd={handleDragEnd}
+                  className={`setlist-row ${dragSource?.kind === "setlist-row" && dragSource.index === index ? "dragging" : ""} ${activeDropTarget?.kind === "replace" && activeDropTarget.index === index ? "replace-target" : ""}`}
+                  data-testid={`slot-row-${index}`}
+                  data-drop-kind="replace"
+                  data-drop-index={index}
+                  onPointerDown={(event) => handleSetlistRowPointerDown(event, index)}
                 >
                   <span className="slot-label">{slotLabels[index]}</span>
                   <span className={`preset-name ${name ? "" : "blank"}`}>{name || "<empty>"}</span>
@@ -682,9 +943,9 @@ export function App() {
                       event.stopPropagation();
                       handleRemovePreset(index);
                     }}
+                    onPointerDown={(event) => event.stopPropagation()}
                     onMouseDown={(event) => event.stopPropagation()}
                     type="button"
-                    draggable={false}
                     aria-label={`Remove preset from ${slotLabels[index]}`}
                   >
                     x
@@ -693,15 +954,28 @@ export function App() {
               </div>
             ))}
             <div
-              className={`drop-gap final-gap ${activeDropIndex === PRESET_SLOT_COUNT ? "active" : ""} ${dragSource ? "visible" : ""}`}
-              onDragOver={(event) => handleInsertDragOver(event, PRESET_SLOT_COUNT)}
-              onDrop={(event) => void handleDrop(event, PRESET_SLOT_COUNT)}
+              className={`drop-gap final-gap ${activeDropTarget?.kind === "insert" && activeDropTarget.index === PRESET_SLOT_COUNT ? "active" : ""} ${dragSource ? "visible" : ""}`}
+              data-testid={`insert-gap-${PRESET_SLOT_COUNT}`}
+              data-drop-kind="insert"
+              data-drop-index={PRESET_SLOT_COUNT}
             >
               <span>Insert here</span>
             </div>
           </div>
         </section>
       </main>
+
+      {dragPointer ? (
+        <div
+          className="drag-preview"
+          style={{
+            left: dragPointer.x + 14,
+            top: dragPointer.y + 14,
+          }}
+        >
+          {dragPointer.label}
+        </div>
+      ) : null}
 
       {showUnsavedModal ? (
         <div className="modal-backdrop">
@@ -721,7 +995,13 @@ export function App() {
               >
                 Save
               </button>
-              <button className="ghost-button" onClick={() => beginSaveAs("switch")}>
+              <button
+                className="ghost-button"
+                onClick={() => {
+                  void handleSaveAsCopy("switch");
+                }}
+                disabled={!activePath}
+              >
                 Save as Copy
               </button>
               <button className="ghost-button" onClick={handleDiscardAndContinue}>
@@ -741,30 +1021,18 @@ export function App() {
         </div>
       ) : null}
 
-      {showSaveAsModal ? (
+      {pendingReplace ? (
         <div className="modal-backdrop">
           <div className="modal-card">
-            <h3>Save setlist copy</h3>
-            <p>Choose a file name for the copied setlist.</p>
-            <input
-              className="text-input"
-              value={saveAsInput}
-              onChange={(event) => setSaveAsInput(event.target.value)}
-              autoFocus
-            />
+            <h3>Replace preset</h3>
+            <p>
+              {`Replace ${slotLabels[pendingReplace.slotIndex]} (${pendingReplace.existingPresetName}) with '${pendingReplace.incomingPresetName}'?`}
+            </p>
             <div className="modal-actions">
-              <button className="solid-button" onClick={() => void handleSaveAsConfirm()}>
-                Save copy
+              <button className="solid-button" onClick={handleConfirmReplace}>
+                OK
               </button>
-              <button
-                className="ghost-button"
-                onClick={() => {
-                  setShowSaveAsModal(false);
-                  if (saveAsReason === "switch") {
-                    setShowUnsavedModal(true);
-                  }
-                }}
-              >
+              <button className="ghost-button" onClick={handleCancelReplace}>
                 Cancel
               </button>
             </div>

@@ -1,4 +1,4 @@
-import { deflateSync, inflateSync } from "node:zlib";
+import { strFromU8, strToU8, unzlibSync, zlibSync } from "fflate";
 
 export interface HlsCompressionInfo {
   crc32: number;
@@ -33,7 +33,7 @@ export interface HlsValidationResult {
 
 export interface DecodedHlsFile<TInner = unknown> {
   outer: HlsOuterFile;
-  innerBytes: Buffer;
+  innerBytes: Uint8Array;
   innerText: string;
   innerJson: TInner;
   computed: {
@@ -65,8 +65,57 @@ export function computeCrc32(input: Uint8Array): number {
   return (crc ^ 0xffffffff) >>> 0;
 }
 
-export function parseHlsOuterFile(input: string | Buffer): HlsOuterFile {
-  const text = Buffer.isBuffer(input) ? input.toString("utf8") : input;
+function toUtf8String(input: string | Uint8Array): string {
+  return typeof input === "string" ? input : strFromU8(input);
+}
+
+function getBufferApi():
+  | {
+      from(input: string | Uint8Array, encoding?: string): Uint8Array & { toString(encoding: string): string };
+    }
+  | undefined {
+  return (globalThis as typeof globalThis & {
+    Buffer?: {
+      from(input: string | Uint8Array, encoding?: string): Uint8Array & { toString(encoding: string): string };
+    };
+  }).Buffer;
+}
+
+function base64ToBytes(base64: string): Uint8Array {
+  const bufferApi = getBufferApi();
+
+  if (bufferApi) {
+    return Uint8Array.from(bufferApi.from(base64, "base64"));
+  }
+
+  const binary = globalThis.atob(base64);
+  const result = new Uint8Array(binary.length);
+
+  for (let index = 0; index < binary.length; index += 1) {
+    result[index] = binary.charCodeAt(index);
+  }
+
+  return result;
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  const bufferApi = getBufferApi();
+
+  if (bufferApi) {
+    return bufferApi.from(bytes).toString("base64");
+  }
+
+  let binary = "";
+
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+
+  return globalThis.btoa(binary);
+}
+
+export function parseHlsOuterFile(input: string | Uint8Array): HlsOuterFile {
+  const text = toUtf8String(input);
   const outer = JSON.parse(text) as HlsOuterFile;
 
   if (typeof outer !== "object" || outer === null) {
@@ -94,11 +143,11 @@ export function parseHlsOuterFile(input: string | Buffer): HlsOuterFile {
   return outer;
 }
 
-export function decodeHlsFile<TInner = unknown>(input: string | Buffer): DecodedHlsFile<TInner> {
+export function decodeHlsFile<TInner = unknown>(input: string | Uint8Array): DecodedHlsFile<TInner> {
   const outer = parseHlsOuterFile(input);
-  const compressed = Buffer.from(outer.encoded_data, "base64");
-  const innerBytes = inflateSync(compressed);
-  const innerText = innerBytes.toString("utf8");
+  const compressed = base64ToBytes(outer.encoded_data);
+  const innerBytes = unzlibSync(compressed);
+  const innerText = strFromU8(innerBytes);
   const innerJson = JSON.parse(innerText) as TInner;
   const computed = {
     crc32: computeCrc32(innerBytes),
@@ -145,15 +194,15 @@ export function encodeHlsFile<TInner>(
   options: HlsOuterTemplate = { schema: "L6Setlist", encoding: "Base64" },
 ): string {
   const innerText = JSON.stringify(innerJson);
-  const innerBytes = Buffer.from(innerText, "utf8");
-  const compressedBytes = deflateSync(innerBytes);
+  const innerBytes = strToU8(innerText);
+  const compressedBytes = zlibSync(innerBytes);
   const outer: HlsOuterFile = {
     ...(options.extraOuterFields ?? {}),
     schema: options.schema ?? "L6Setlist",
     version: options.version,
     encoding: options.encoding ?? "Base64",
     meta: options.meta,
-    encoded_data: compressedBytes.toString("base64"),
+    encoded_data: bytesToBase64(compressedBytes),
     compression: {
       crc32: computeCrc32(innerBytes),
       decompressed_size: innerBytes.byteLength,
