@@ -22,6 +22,20 @@ vi.mock("../web/src/api", () => apiMocks);
 
 import { App } from "../web/src/App";
 
+function createLibraryEntry(
+  name: string,
+  absolutePath: string,
+  relativeDirectory = "",
+) {
+  return {
+    name,
+    absolutePath,
+    relativeDirectory,
+    modifiedAt: "",
+    size: 100,
+  };
+}
+
 function createPresetSlot(name = ""): Record<string, unknown> {
   return name ? { meta: { name } } : {};
 }
@@ -49,6 +63,7 @@ function createSetlistResponse(names: string[] = []) {
     file: {
       name: "Example",
       absolutePath: "/setlists/Example.hls",
+      relativeDirectory: "",
       modifiedAt: "",
       size: 100,
     },
@@ -71,6 +86,7 @@ function createPresetResponse(name: string) {
     file: {
       name,
       absolutePath: `/presets/${name}.hlx`,
+      relativeDirectory: "",
       modifiedAt: "",
       size: 100,
     },
@@ -108,16 +124,17 @@ describe("App desktop flows", () => {
     apiMocks.saveSetlist.mockResolvedValue({
       name: "Example",
       absolutePath: "/setlists/Example.hls",
+      relativeDirectory: "",
       modifiedAt: "",
       size: 100,
     });
     apiMocks.saveSetlistAs.mockResolvedValue({
       name: "Example Copy",
       absolutePath: "/setlists/Example Copy.hls",
+      relativeDirectory: "",
       modifiedAt: "",
       size: 100,
     });
-    vi.spyOn(window, "confirm").mockReturnValue(true);
   });
 
   afterEach(() => {
@@ -129,35 +146,31 @@ describe("App desktop flows", () => {
   it("selects setlist and preset directories from header icon buttons", async () => {
     apiMocks.pickSetlistDirectory.mockResolvedValue("/setlists");
     apiMocks.pickPresetDirectory.mockResolvedValue("/presets");
-    apiMocks.listSetlists.mockResolvedValue([
-      { name: "Example", absolutePath: "/setlists/Example.hls", modifiedAt: "", size: 100 },
-    ]);
-    apiMocks.listPresets.mockResolvedValue([
-      { name: "Boulevard", absolutePath: "/presets/Boulevard.hlx", modifiedAt: "", size: 100 },
-    ]);
+    apiMocks.listSetlists.mockResolvedValue([createLibraryEntry("Example", "/setlists/Example.hls")]);
+    apiMocks.listPresets.mockResolvedValue([createLibraryEntry("Boulevard", "/presets/Boulevard.hlx")]);
 
     render(<App />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Select setlist directory" }));
-    await waitFor(() => expect(apiMocks.listSetlists).toHaveBeenCalledWith("/setlists"));
+    await waitFor(() => expect(apiMocks.listSetlists).toHaveBeenCalledWith("/setlists", false));
     expect(await screen.findByText("Example")).toBeTruthy();
+    expect(screen.getByText("/setlists")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Select preset directory" }));
-    await waitFor(() => expect(apiMocks.listPresets).toHaveBeenCalledWith("/presets"));
+    await waitFor(() => expect(apiMocks.listPresets).toHaveBeenCalledWith("/presets", false));
     expect(await screen.findByText("Boulevard")).toBeTruthy();
+    expect(screen.getByText("/presets")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /delete/i })).toBeNull();
   });
 
-  it("opens the native save dialog directly for Save as Copy", async () => {
+  it("opens the native save dialog directly for Save As", async () => {
     apiMocks.loadAppSettings.mockResolvedValue({ setlistDirectory: "/setlists" });
-    apiMocks.listSetlists.mockResolvedValue([
-      { name: "Example", absolutePath: "/setlists/Example.hls", modifiedAt: "", size: 100 },
-    ]);
+    apiMocks.listSetlists.mockResolvedValue([createLibraryEntry("Example", "/setlists/Example.hls")]);
 
     render(<App />);
 
     await screen.findByDisplayValue("Example");
-    fireEvent.click(screen.getByRole("button", { name: "Save as Copy" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save As" }));
 
     await waitFor(() =>
       expect(apiMocks.saveSetlistAs).toHaveBeenCalledWith(
@@ -175,12 +188,8 @@ describe("App desktop flows", () => {
       setlistDirectory: "/setlists",
       presetDirectory: "/presets",
     });
-    apiMocks.listSetlists.mockResolvedValue([
-      { name: "Example", absolutePath: "/setlists/Example.hls", modifiedAt: "", size: 100 },
-    ]);
-    apiMocks.listPresets.mockResolvedValue([
-      { name: "Dragged Preset", absolutePath: "/presets/Dragged Preset.hlx", modifiedAt: "", size: 100 },
-    ]);
+    apiMocks.listSetlists.mockResolvedValue([createLibraryEntry("Example", "/setlists/Example.hls")]);
+    apiMocks.listPresets.mockResolvedValue([createLibraryEntry("Dragged Preset", "/presets/Dragged Preset.hlx")]);
     apiMocks.loadSetlist.mockResolvedValue(createSetlistResponse(["Existing"]));
     apiMocks.loadPreset.mockResolvedValue(createPresetResponse("Dragged Preset"));
 
@@ -204,12 +213,8 @@ describe("App desktop flows", () => {
       setlistDirectory: "/setlists",
       presetDirectory: "/presets",
     });
-    apiMocks.listSetlists.mockResolvedValue([
-      { name: "Example", absolutePath: "/setlists/Example.hls", modifiedAt: "", size: 100 },
-    ]);
-    apiMocks.listPresets.mockResolvedValue([
-      { name: "Replacement", absolutePath: "/presets/Replacement.hlx", modifiedAt: "", size: 100 },
-    ]);
+    apiMocks.listSetlists.mockResolvedValue([createLibraryEntry("Example", "/setlists/Example.hls")]);
+    apiMocks.listPresets.mockResolvedValue([createLibraryEntry("Replacement", "/presets/Replacement.hlx")]);
     apiMocks.loadSetlist.mockResolvedValue(createSetlistResponse(["Original"]));
     apiMocks.loadPreset.mockResolvedValue(createPresetResponse("Replacement"));
 
@@ -226,7 +231,6 @@ describe("App desktop flows", () => {
     fireEvent.pointerUp(window, { clientX: 220, clientY: 220 });
 
     await waitFor(() => expect(within(screen.getByTestId("slot-row-1")).getByText("Replacement")).toBeTruthy());
-    expect(window.confirm).not.toHaveBeenCalled();
 
     elementFromPoint.mockReturnValue(populatedRow);
     fireEvent.pointerDown(presetRow.closest(".preset-row") as Element, { button: 0, clientX: 40, clientY: 40 });
@@ -253,9 +257,7 @@ describe("App desktop flows", () => {
 
   it("reorders existing setlist rows by dropping on a gap", async () => {
     apiMocks.loadAppSettings.mockResolvedValue({ setlistDirectory: "/setlists" });
-    apiMocks.listSetlists.mockResolvedValue([
-      { name: "Example", absolutePath: "/setlists/Example.hls", modifiedAt: "", size: 100 },
-    ]);
+    apiMocks.listSetlists.mockResolvedValue([createLibraryEntry("Example", "/setlists/Example.hls")]);
     apiMocks.loadSetlist.mockResolvedValue(createSetlistResponse(["One", "Two", "Three"]));
 
     render(<App />);
@@ -281,7 +283,7 @@ describe("App desktop flows", () => {
     await screen.findByDisplayValue("New Setlist");
 
     const saveButton = screen.getByRole("button", { name: "Save" });
-    const saveCopyButton = screen.getByRole("button", { name: "Save as Copy" });
+    const saveCopyButton = screen.getByRole("button", { name: "Save As" });
 
     expect((saveButton as HTMLButtonElement).disabled).toBe(false);
     expect((saveCopyButton as HTMLButtonElement).disabled).toBe(true);
@@ -289,5 +291,96 @@ describe("App desktop flows", () => {
     fireEvent.click(saveButton);
 
     await waitFor(() => expect(apiMocks.saveSetlistAs).toHaveBeenCalledTimes(1));
+  });
+
+  it("resets a dirty saved setlist back to the on-disk version", async () => {
+    apiMocks.loadAppSettings.mockResolvedValue({ setlistDirectory: "/setlists" });
+    apiMocks.listSetlists.mockResolvedValue([createLibraryEntry("Example", "/setlists/Example.hls")]);
+    apiMocks.loadSetlist
+      .mockResolvedValueOnce(createSetlistResponse(["Original"]))
+      .mockResolvedValueOnce(createSetlistResponse(["Original"]));
+
+    render(<App />);
+
+    await screen.findByDisplayValue("Example");
+    fireEvent.click(screen.getByRole("button", { name: "Sort setlist alphabetically" }));
+    fireEvent.click(await screen.findByRole("button", { name: "OK" }));
+    expect(screen.getByText("Example *")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+
+    await waitFor(() => expect(apiMocks.loadSetlist).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText("Example *")).toBeNull();
+    expect(within(screen.getByTestId("slot-row-0")).getByText("Original")).toBeTruthy();
+  });
+
+  it("toggles recursive scanning and shows relative directories in both panels", async () => {
+    apiMocks.loadAppSettings.mockResolvedValue({
+      setlistDirectory: "/setlists",
+      presetDirectory: "/presets",
+    });
+    apiMocks.listSetlists.mockImplementation(async (_directory: string, includeSubdirectories: boolean) =>
+      includeSubdirectories
+        ? [createLibraryEntry("Example", "/setlists/Pearl Jam/Example.hls", "/Pearl Jam")]
+        : [createLibraryEntry("Example", "/setlists/Example.hls")],
+    );
+    apiMocks.listPresets.mockImplementation(async (_directory: string, includeSubdirectories: boolean) =>
+      includeSubdirectories
+        ? [createLibraryEntry("Alive", "/presets/Pearl Jam/Alive.hlx", "/Pearl Jam")]
+        : [createLibraryEntry("Alive", "/presets/Alive.hlx")],
+    );
+
+    render(<App />);
+
+    await screen.findByText("Example");
+    const checkboxes = screen.getAllByRole("checkbox", { name: "Include subdirectories" });
+
+    fireEvent.click(checkboxes[0] as HTMLInputElement);
+    fireEvent.click(checkboxes[1] as HTMLInputElement);
+
+    await waitFor(() => expect(apiMocks.listSetlists).toHaveBeenLastCalledWith("/setlists", true));
+    await waitFor(() => expect(apiMocks.listPresets).toHaveBeenLastCalledWith("/presets", true));
+    const setlistsPanel = screen.getByRole("heading", { name: "Setlists" }).closest("section");
+    const presetsPanel = screen.getByRole("heading", { name: "Presets" }).closest("section");
+
+    expect(setlistsPanel).toBeTruthy();
+    expect(presetsPanel).toBeTruthy();
+    expect(within(setlistsPanel as HTMLElement).getByText("/Pearl Jam")).toBeTruthy();
+    expect(within(presetsPanel as HTMLElement).getByText("/Pearl Jam")).toBeTruthy();
+  });
+
+  it("sorts named presets alphabetically after confirmation", async () => {
+    apiMocks.loadAppSettings.mockResolvedValue({ setlistDirectory: "/setlists" });
+    apiMocks.listSetlists.mockResolvedValue([createLibraryEntry("Example", "/setlists/Example.hls")]);
+    apiMocks.loadSetlist.mockResolvedValue(createSetlistResponse(["zeta", "", "Alpha", "beta"]));
+
+    render(<App />);
+
+    await screen.findByDisplayValue("Example");
+    fireEvent.click(screen.getByRole("button", { name: "Sort setlist alphabetically" }));
+    expect(await screen.findByText("Sort setlist")).toBeTruthy();
+    expect(screen.getByText("Sorting a setlist alphabetically can't be undone. Continue?")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "OK" }));
+
+    expect(within(screen.getByTestId("slot-row-0")).getByText("Alpha")).toBeTruthy();
+    expect(within(screen.getByTestId("slot-row-1")).getByText("beta")).toBeTruthy();
+    expect(within(screen.getByTestId("slot-row-2")).getByText("zeta")).toBeTruthy();
+    expect(within(screen.getByTestId("slot-row-3")).getByText("<empty>")).toBeTruthy();
+  });
+
+  it("leaves the setlist unchanged when alphabetical sort is cancelled", async () => {
+    apiMocks.loadAppSettings.mockResolvedValue({ setlistDirectory: "/setlists" });
+    apiMocks.listSetlists.mockResolvedValue([createLibraryEntry("Example", "/setlists/Example.hls")]);
+    apiMocks.loadSetlist.mockResolvedValue(createSetlistResponse(["zeta", "Alpha"]));
+
+    render(<App />);
+
+    await screen.findByDisplayValue("Example");
+    fireEvent.click(screen.getByRole("button", { name: "Sort setlist alphabetically" }));
+    expect(await screen.findByText("Sort setlist")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(within(screen.getByTestId("slot-row-0")).getByText("zeta")).toBeTruthy();
+    expect(within(screen.getByTestId("slot-row-1")).getByText("Alpha")).toBeTruthy();
   });
 });

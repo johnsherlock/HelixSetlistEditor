@@ -9,6 +9,7 @@ import {
   movePresetWithinSetlistDraft,
   replacePresetInSetlistDraft,
   removePresetFromSetlistDraft,
+  sortSetlistDraftAlphabetically,
 } from "../src/domain/index.js";
 
 const setlistFixturePath = resolve(process.cwd(), "tests", "fixtures", "IMGL Fibs.hls");
@@ -188,5 +189,38 @@ describe("setlist domain helpers", () => {
     expect(names[1]).toBe("Boulevard");
     expect(names[2]).toBe(originalPresets[2]?.meta?.name ?? "");
     expect(names).toHaveLength(128);
+  });
+
+  it("sorts named presets alphabetically, case-insensitively, with empty slots trailing", () => {
+    const decoded = decodeHlsFile<Record<string, unknown>>(readFileSync(setlistFixturePath));
+    const draft = {
+      sourcePath: "IMGL Fibs.hls",
+      outerTemplate: {
+        schema: decoded.outer.schema,
+        version: decoded.outer.version,
+        encoding: decoded.outer.encoding,
+        meta: decoded.outer.meta,
+      },
+      innerJson: {
+        ...decoded.innerJson,
+        presets: [
+          { meta: { name: "zeta" } },
+          {},
+          { meta: { name: "Alpha" } },
+          { meta: { name: "beta" } },
+          ...Array.from({ length: 124 }, () => ({})),
+        ],
+      },
+    };
+
+    const sorted = sortSetlistDraftAlphabetically(draft);
+    const names = (sorted.innerJson.presets as Array<{ meta?: { name?: string } }>).map((preset) => preset.meta?.name ?? "");
+
+    expect(names).toHaveLength(128);
+    expect(names[0]).toBe("Alpha");
+    expect(names[1]).toBe("beta");
+    expect(names[2]).toBe("zeta");
+    expect(names[3]).toBe("");
+    expect(names[127]).toBe("");
   });
 });

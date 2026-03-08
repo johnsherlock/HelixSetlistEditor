@@ -153,3 +153,37 @@ export function insertPresetIntoSetlistDraft(
     truncatedExistingPreset: truncated && Boolean(droppedPresetName),
   };
 }
+
+export function sortSetlistDraftAlphabetically(draft: SetlistDraftLike): SetlistDraftLike {
+  const presets = getPresetsArray(draft);
+
+  while (presets.length < PRESET_SLOT_COUNT) {
+    presets.push(createBlankPreset());
+  }
+
+  const rankedPresets = presets
+    .slice(0, PRESET_SLOT_COUNT)
+    .map((preset, index) => {
+      const meta = asRecord(asRecord(preset).meta);
+      const name = typeof meta.name === "string" ? meta.name.trim() : "";
+      return {
+        index,
+        name,
+        preset,
+      };
+    });
+
+  const namedPresets = rankedPresets
+    .filter((entry) => entry.name)
+    .sort((left, right) => {
+      const nameCompare = left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
+      return nameCompare !== 0 ? nameCompare : left.index - right.index;
+    })
+    .map((entry) => clone(entry.preset));
+
+  while (namedPresets.length < PRESET_SLOT_COUNT) {
+    namedPresets.push(createBlankPreset());
+  }
+
+  return setPresetsArray(draft, namedPresets.slice(0, PRESET_SLOT_COUNT));
+}

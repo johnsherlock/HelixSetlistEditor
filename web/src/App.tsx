@@ -7,6 +7,7 @@ import {
   PRESET_SLOT_COUNT,
   replacePresetInSetlistDraft,
   removePresetFromSetlistDraft,
+  sortSetlistDraftAlphabetically,
 } from "../../src/domain/index.js";
 import {
   listPresets,
@@ -49,6 +50,10 @@ type DragPointerState = {
   x: number;
   y: number;
   label: string;
+} | null;
+type RecentDropHighlight = {
+  index: number;
+  nonce: number;
 } | null;
 
 function createSlotLabels(): string[] {
@@ -169,9 +174,26 @@ function FolderOpenIcon() {
   );
 }
 
+function SortAlphaIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M7 5v14m0 0-3-3m3 3 3-3M13 7h6M13 12h4M13 17h2"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.5"
+      />
+    </svg>
+  );
+}
+
 export function App() {
   const [setlistDirectory, setSetlistDirectory] = useState<string | null>(null);
   const [presetDirectory, setPresetDirectory] = useState<string | null>(null);
+  const [includeSetlistSubdirectories, setIncludeSetlistSubdirectories] = useState(false);
+  const [includePresetSubdirectories, setIncludePresetSubdirectories] = useState(false);
   const [setlists, setSetlists] = useState<LibraryEntry[]>([]);
   const [presets, setPresets] = useState<LibraryEntry[]>([]);
   const [presetFilter, setPresetFilter] = useState("");
@@ -184,10 +206,12 @@ export function App() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [pendingReplace, setPendingReplace] = useState<PendingReplace>(null);
+  const [showSortConfirm, setShowSortConfirm] = useState(false);
   const [showUnsavedModal, setShowUnsavedModal] = useState(false);
   const [dragSource, setDragSource] = useState<DragSource>(null);
   const [activeDropTarget, setActiveDropTarget] = useState<DropTarget>(null);
   const [dragPointer, setDragPointer] = useState<DragPointerState>(null);
+  const [recentDropHighlight, setRecentDropHighlight] = useState<RecentDropHighlight>(null);
 
   const filteredPresets = useMemo(() => {
     const query = presetFilter.trim().toLowerCase();
@@ -226,6 +250,8 @@ export function App() {
 
         setSetlistDirectory(settings.setlistDirectory ?? null);
         setPresetDirectory(settings.presetDirectory ?? null);
+        setIncludeSetlistSubdirectories(settings.includeSetlistSubdirectories ?? false);
+        setIncludePresetSubdirectories(settings.includePresetSubdirectories ?? false);
       } finally {
         if (!cancelled) {
           setSettingsLoaded(true);
@@ -247,26 +273,38 @@ export function App() {
     void saveAppSettings({
       setlistDirectory: setlistDirectory ?? undefined,
       presetDirectory: presetDirectory ?? undefined,
+      includeSetlistSubdirectories,
+      includePresetSubdirectories,
     } satisfies AppSettings);
-  }, [presetDirectory, setlistDirectory, settingsLoaded]);
+  }, [
+    includePresetSubdirectories,
+    includeSetlistSubdirectories,
+    presetDirectory,
+    setlistDirectory,
+    settingsLoaded,
+  ]);
 
   useEffect(() => {
     if (!settingsLoaded) {
       return;
     }
 
-    void refreshSetlists(!activePath && !draft, setlistDirectory);
-  }, [setlistDirectory, settingsLoaded]);
+    void refreshSetlists(!activePath && !draft, setlistDirectory, includeSetlistSubdirectories);
+  }, [activePath, draft, includeSetlistSubdirectories, setlistDirectory, settingsLoaded]);
 
   useEffect(() => {
     if (!settingsLoaded) {
       return;
     }
 
-    void refreshPresets(presetDirectory);
-  }, [presetDirectory, settingsLoaded]);
+    void refreshPresets(presetDirectory, includePresetSubdirectories);
+  }, [includePresetSubdirectories, presetDirectory, settingsLoaded]);
 
-  async function refreshSetlists(autoSelectFirst: boolean, directory: string | null): Promise<void> {
+  async function refreshSetlists(
+    autoSelectFirst: boolean,
+    directory: string | null,
+    includeSubdirectories: boolean,
+  ): Promise<void> {
     if (!directory) {
       setSetlists([]);
       return;
@@ -276,7 +314,7 @@ export function App() {
     setErrorMessage(null);
 
     try {
-      const nextSetlists = await listSetlists(directory);
+      const nextSetlists = await listSetlists(directory, includeSubdirectories);
 
       setSetlists(nextSetlists);
 
@@ -290,7 +328,7 @@ export function App() {
     }
   }
 
-  async function refreshPresets(directory: string | null): Promise<void> {
+  async function refreshPresets(directory: string | null, includeSubdirectories: boolean): Promise<void> {
     if (!directory) {
       setPresets([]);
       return;
@@ -300,7 +338,7 @@ export function App() {
     setErrorMessage(null);
 
     try {
-      setPresets(await listPresets(directory));
+      setPresets(await listPresets(directory, includeSubdirectories));
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Failed to load presets.");
     } finally {
@@ -431,6 +469,22 @@ export function App() {
     setDragPointer(null);
   }
 
+  function clearDragVisuals(): void {
+    setDragSource(null);
+    setActiveDropTarget(null);
+    setDragPointer(null);
+  }
+
+  function flashSlot(index: number): void {
+    setRecentDropHighlight(null);
+    window.setTimeout(() => {
+      setRecentDropHighlight({
+        index,
+        nonce: Date.now(),
+      });
+    }, 0);
+  }
+
   function setInsertTarget(insertIndex: number): void {
     setActiveDropTarget({ kind: "insert", index: insertIndex });
   }
@@ -478,6 +532,7 @@ export function App() {
 
         setDraft(nextDraft as SetlistDraft);
         setDirty(true);
+        flashSlot(effectiveInsertIndex);
         return;
       }
 
@@ -485,8 +540,10 @@ export function App() {
         return;
       }
 
+      const targetIndex = source.index < insertIndex ? insertIndex - 1 : insertIndex;
       setDraft(movePresetWithinSetlistDraft(draft, source.index, insertIndex) as SetlistDraft);
       setDirty(true);
+      flashSlot(Math.max(0, Math.min(targetIndex, PRESET_SLOT_COUNT - 1)));
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Failed to update the setlist.");
     } finally {
@@ -533,6 +590,7 @@ export function App() {
 
       setDraft(nextDraft as SetlistDraft);
       setDirty(true);
+      flashSlot(replaceIndex);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Failed to replace the preset.");
     } finally {
@@ -549,6 +607,7 @@ export function App() {
 
     setDraft(replacePresetInSetlistDraft(draft, pendingReplace.preset, pendingReplace.slotIndex) as SetlistDraft);
     setDirty(true);
+    flashSlot(pendingReplace.slotIndex);
     setPendingReplace(null);
   }
 
@@ -628,6 +687,8 @@ export function App() {
         return;
       }
 
+      clearDragVisuals();
+
       if (target.kind === "insert") {
         void applyInsertDrop(currentSource, target.index);
         return;
@@ -650,6 +711,22 @@ export function App() {
     };
   }, [dragSource, presetNames, slotLabels, draft]);
 
+  useEffect(() => {
+    if (!recentDropHighlight) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setRecentDropHighlight((current) =>
+        current?.nonce === recentDropHighlight.nonce ? null : current,
+      );
+    }, 900);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [recentDropHighlight]);
+
   function handleRemovePreset(index: number): void {
     if (!draft) {
       return;
@@ -658,6 +735,30 @@ export function App() {
     setDraft(removePresetFromSetlistDraft(draft, index) as SetlistDraft);
     setDirty(true);
     setErrorMessage(null);
+  }
+
+  function handleAlphabeticalSort(): void {
+    if (!draft) {
+      return;
+    }
+
+    setShowSortConfirm(true);
+  }
+
+  function handleConfirmAlphabeticalSort(): void {
+    if (!draft) {
+      setShowSortConfirm(false);
+      return;
+    }
+
+    setDraft(sortSetlistDraftAlphabetically(draft) as SetlistDraft);
+    setDirty(true);
+    setErrorMessage(null);
+    setShowSortConfirm(false);
+  }
+
+  function handleCancelAlphabeticalSort(): void {
+    setShowSortConfirm(false);
   }
 
   async function handleSave(): Promise<boolean> {
@@ -736,6 +837,21 @@ export function App() {
     void createNewDraftFromTemplate();
   }
 
+  async function handleReset(): Promise<void> {
+    if (!draft || !dirty) {
+      return;
+    }
+
+    setErrorMessage(null);
+
+    if (activePath) {
+      await loadIntoEditor(activePath);
+      return;
+    }
+
+    await createNewDraftFromTemplate();
+  }
+
   async function handleSaveAsCopy(reason: "manual" | "switch" = "manual"): Promise<boolean> {
     if (!draft) {
       return false;
@@ -769,7 +885,7 @@ export function App() {
       if (nextDirectory && nextDirectory !== setlistDirectory) {
         setSetlistDirectory(nextDirectory);
       } else if (setlistDirectory) {
-        await refreshSetlists(false, setlistDirectory);
+        await refreshSetlists(false, setlistDirectory, includeSetlistSubdirectories);
       }
 
       if (reason === "switch") {
@@ -805,12 +921,33 @@ export function App() {
               <FolderOpenIcon />
             </button>
           </div>
+          <div className="panel-meta">
+            <p className="panel-directory-path" title={setlistDirectory ?? "No setlist directory selected"}>
+              {setlistDirectory ?? "No setlist directory selected"}
+            </p>
+            <label className="subdir-toggle">
+              <input
+                type="checkbox"
+                checked={includeSetlistSubdirectories}
+                onChange={(event) => setIncludeSetlistSubdirectories(event.target.checked)}
+                disabled={!setlistDirectory}
+              />
+              <span>Include subdirectories</span>
+            </label>
+          </div>
           <div className="scroll-region">
             {setlists.map((entry) => (
               <div key={entry.absolutePath} className={`list-row ${entry.absolutePath === activePath ? "active" : ""}`}>
-                <button className="list-select" onClick={() => handleSelectSetlist(entry.absolutePath)}>
-                  <span>{entry.name}</span>
-                  <span>{dirty && entry.absolutePath === activePath ? "*" : ""}</span>
+                <button className="list-select" onClick={() => handleSelectSetlist(entry.absolutePath)} type="button">
+                  <span className="list-primary">
+                    {entry.name}
+                    {dirty && entry.absolutePath === activePath ? " *" : ""}
+                  </span>
+                  {includeSetlistSubdirectories && entry.relativeDirectory ? (
+                    <span className="list-secondary" title={entry.relativeDirectory}>
+                      {entry.relativeDirectory}
+                    </span>
+                  ) : null}
                 </button>
               </div>
             ))}
@@ -838,6 +975,20 @@ export function App() {
               <FolderOpenIcon />
             </button>
           </div>
+          <div className="panel-meta">
+            <p className="panel-directory-path" title={presetDirectory ?? "No preset directory selected"}>
+              {presetDirectory ?? "No preset directory selected"}
+            </p>
+            <label className="subdir-toggle">
+              <input
+                type="checkbox"
+                checked={includePresetSubdirectories}
+                onChange={(event) => setIncludePresetSubdirectories(event.target.checked)}
+                disabled={!presetDirectory}
+              />
+              <span>Include subdirectories</span>
+            </label>
+          </div>
           <div className="filter-shell">
             <input
               className="text-input filter-input"
@@ -864,7 +1015,12 @@ export function App() {
                 className={`preset-row ${dragSource?.kind === "library-preset" && dragSource.absolutePath === entry.absolutePath ? "dragging" : ""}`}
                 onPointerDown={(event) => handlePresetPointerDown(event, entry.absolutePath)}
               >
-                <span>{entry.name}</span>
+                <span className="list-primary">{entry.name}</span>
+                {includePresetSubdirectories && entry.relativeDirectory ? (
+                  <span className="list-secondary" title={entry.relativeDirectory}>
+                    {entry.relativeDirectory}
+                  </span>
+                ) : null}
               </div>
             ))}
             {!presetDirectory ? <p className="empty-state">Select a preset directory to browse preset files.</p> : null}
@@ -875,7 +1031,7 @@ export function App() {
 
       <main className="workspace">
         <header className="hero">
-          <div>
+          <div className="hero-copy">
             <h1>Helix Setlist Editor</h1>
           </div>
           <div className="action-row">
@@ -886,7 +1042,10 @@ export function App() {
               Save
             </button>
             <button className="ghost-button" onClick={() => void handleSaveAsCopy("manual")} disabled={!draft || !activePath || saving}>
-              Save as Copy
+              Save As
+            </button>
+            <button className="ghost-button" onClick={() => void handleReset()} disabled={!draft || !dirty || saving}>
+              Reset
             </button>
           </div>
         </header>
@@ -915,6 +1074,16 @@ export function App() {
 
           <div className="status-row">
             <span>{loading ? "Loading..." : `${presetNames.filter(Boolean).length} named presets`}</span>
+            <button
+              className="icon-button sort-button"
+              type="button"
+              aria-label="Sort setlist alphabetically"
+              title="Sort setlist alphabetically"
+              onClick={handleAlphabeticalSort}
+              disabled={!draft || saving}
+            >
+              <SortAlphaIcon />
+            </button>
           </div>
 
           <div className="setlist-grid">
@@ -929,7 +1098,7 @@ export function App() {
                   <span>Insert here</span>
                 </div>
                 <div
-                  className={`setlist-row ${dragSource?.kind === "setlist-row" && dragSource.index === index ? "dragging" : ""} ${activeDropTarget?.kind === "replace" && activeDropTarget.index === index ? "replace-target" : ""}`}
+                  className={`setlist-row ${dragSource?.kind === "setlist-row" && dragSource.index === index ? "dragging" : ""} ${activeDropTarget?.kind === "replace" && activeDropTarget.index === index ? "replace-target" : ""} ${recentDropHighlight?.index === index ? "recent-drop" : ""}`}
                   data-testid={`slot-row-${index}`}
                   data-drop-kind="replace"
                   data-drop-index={index}
@@ -1002,7 +1171,7 @@ export function App() {
                 }}
                 disabled={!activePath}
               >
-                Save as Copy
+                Save As
               </button>
               <button className="ghost-button" onClick={handleDiscardAndContinue}>
                 Discard
@@ -1033,6 +1202,23 @@ export function App() {
                 OK
               </button>
               <button className="ghost-button" onClick={handleCancelReplace}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showSortConfirm ? (
+        <div className="modal-backdrop">
+          <div className="modal-card">
+            <h3>Sort setlist</h3>
+            <p>Sorting a setlist alphabetically can't be undone. Continue?</p>
+            <div className="modal-actions">
+              <button className="solid-button" onClick={handleConfirmAlphabeticalSort}>
+                OK
+              </button>
+              <button className="ghost-button" onClick={handleCancelAlphabeticalSort}>
                 Cancel
               </button>
             </div>

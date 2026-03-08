@@ -1,6 +1,7 @@
 export interface LibraryEntry {
   name: string;
   absolutePath: string;
+  relativeDirectory: string;
   modifiedAt: string;
   size: number;
 }
@@ -48,4 +49,6 @@ export interface LoadedPresetResponse {
 export interface AppSettings {
   setlistDirectory?: string;
   presetDirectory?: string;
+  includeSetlistSubdirectories?: boolean;
+  includePresetSubdirectories?: boolean;
 }

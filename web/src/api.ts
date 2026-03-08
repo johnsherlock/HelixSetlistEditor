@@ -62,17 +62,19 @@ export async function pickPresetDirectory(): Promise<string | null> {
   );
 }
 
-export async function listSetlists(directory: string): Promise<LibraryEntry[]> {
+export async function listSetlists(directory: string, includeSubdirectories: boolean): Promise<LibraryEntry[]> {
   return invokeCommand<LibraryEntry[]>("list_library_entries", {
     directory,
     extension: ".hls",
+    includeSubdirectories,
   });
 }
 
-export async function listPresets(directory: string): Promise<LibraryEntry[]> {
+export async function listPresets(directory: string, includeSubdirectories: boolean): Promise<LibraryEntry[]> {
   return invokeCommand<LibraryEntry[]>("list_library_entries", {
     directory,
     extension: ".hlx",
+    includeSubdirectories,
   });
 }
 
@@ -87,6 +89,7 @@ export async function loadSetlist(absolutePath: string): Promise<LoadedSetlistRe
     file: {
       name: getBaseName(absolutePath),
       absolutePath,
+      relativeDirectory: "",
       modifiedAt: "",
       size: fileText.length,
     },
@@ -113,6 +116,7 @@ export async function loadPreset(absolutePath: string): Promise<LoadedPresetResp
     file: {
       name: getBaseName(absolutePath),
       absolutePath,
+      relativeDirectory: "",
       modifiedAt: "",
       size: fileText.length,
     },
@@ -142,6 +146,7 @@ export async function saveSetlist(input: {
   return {
     name: getBaseName(input.absolutePath),
     absolutePath: input.absolutePath,
+    relativeDirectory: "",
     modifiedAt: "",
     size: fileText.length,
   };

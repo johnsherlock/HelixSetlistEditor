@@ -14,7 +14,8 @@
       {
         "title": "Helix Setlist Editor",
         "width": 1440,
-        "height": 960,
+        "height": 1380,
+        "minWidth": 500,
         "maxWidth": 1440,
         "resizable": true
       }
