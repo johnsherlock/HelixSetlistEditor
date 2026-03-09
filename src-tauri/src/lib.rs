@@ -1,8 +1,12 @@
 use serde::Serialize;
 use std::fs;
 use std::path::PathBuf;
+use std::process::Command;
 use std::time::UNIX_EPOCH;
-use tauri::{LogicalSize, Manager, Size};
+use tauri::{
+    menu::{AboutMetadata, Menu, PredefinedMenuItem, Submenu},
+    LogicalSize, Manager, Size,
+};
 use walkdir::WalkDir;
 
 #[derive(Serialize)]
@@ -123,6 +127,37 @@ fn write_text_file(absolute_path: String, contents: String, overwrite: bool) -> 
 }
 
 #[tauri::command]
+fn move_file_to_trash(absolute_path: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let escaped_path = absolute_path.replace('\\', "\\\\").replace('"', "\\\"");
+        let script = format!("tell application \"Finder\" to delete POSIX file \"{}\"", escaped_path);
+        let output = Command::new("osascript")
+            .arg("-e")
+            .arg(script)
+            .output()
+            .map_err(|error| error.to_string())?;
+
+        if output.status.success() {
+            return Ok(());
+        }
+
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(if stderr.is_empty() {
+            format!("Failed to move file to Trash: {}", absolute_path)
+        } else {
+            stderr
+        });
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = absolute_path;
+        Err("Move to Trash is not implemented on this platform yet.".to_string())
+    }
+}
+
+#[tauri::command]
 fn load_blank_template(app_handle: tauri::AppHandle) -> Result<String, String> {
     let resource_path = app_handle
         .path()
@@ -137,6 +172,73 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            #[cfg(target_os = "macos")]
+            {
+                let pkg_info = app.package_info();
+                let config = app.config();
+                let about_metadata = AboutMetadata {
+                    name: Some(pkg_info.name.clone()),
+                    version: Some(pkg_info.version.to_string()),
+                    credits: Some("By John Sherlock".to_string()),
+                    copyright: config.bundle.copyright.clone(),
+                    authors: config.bundle.publisher.clone().map(|publisher| vec![publisher]),
+                    ..Default::default()
+                };
+
+                let menu = Menu::with_items(
+                    app,
+                    &[
+                        &Submenu::with_items(
+                            app,
+                            pkg_info.name.clone(),
+                            true,
+                            &[
+                                &PredefinedMenuItem::about(app, None, Some(about_metadata))?,
+                                &PredefinedMenuItem::separator(app)?,
+                                &PredefinedMenuItem::services(app, None)?,
+                                &PredefinedMenuItem::separator(app)?,
+                                &PredefinedMenuItem::hide(app, None)?,
+                                &PredefinedMenuItem::hide_others(app, None)?,
+                                &PredefinedMenuItem::show_all(app, None)?,
+                                &PredefinedMenuItem::separator(app)?,
+                                &PredefinedMenuItem::quit(app, None)?,
+                            ],
+                        )?,
+                        &Submenu::with_items(
+                            app,
+                            "File",
+                            true,
+                            &[&PredefinedMenuItem::close_window(app, None)?],
+                        )?,
+                        &Submenu::with_items(
+                            app,
+                            "View",
+                            true,
+                            &[&PredefinedMenuItem::fullscreen(app, None)?],
+                        )?,
+                        &Submenu::with_items(
+                            app,
+                            "Window",
+                            true,
+                            &[
+                                &PredefinedMenuItem::minimize(app, None)?,
+                                &PredefinedMenuItem::maximize(app, None)?,
+                                &PredefinedMenuItem::separator(app)?,
+                                &PredefinedMenuItem::close_window(app, None)?,
+                            ],
+                        )?,
+                        &Submenu::with_items(
+                            app,
+                            "Help",
+                            true,
+                            &[&PredefinedMenuItem::about(app, None, None)?],
+                        )?,
+                    ],
+                )?;
+
+                app.set_menu(menu)?;
+            }
+
             if let Some(window) = app.get_webview_window("main") {
                 let target_width = 1440.0;
                 let target_height = window
@@ -159,6 +261,7 @@ pub fn run() {
             list_library_entries,
             read_text_file,
             write_text_file,
+            move_file_to_trash,
             load_blank_template
         ])
         .run(tauri::generate_context!())

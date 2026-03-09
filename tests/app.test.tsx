@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const apiMocks = vi.hoisted(() => ({
+  deleteSetlist: vi.fn(),
   listPresets: vi.fn(),
   listSetlists: vi.fn(),
   loadAppSettings: vi.fn(),
@@ -114,6 +115,7 @@ describe("App desktop flows", () => {
   beforeEach(() => {
     apiMocks.loadAppSettings.mockResolvedValue({});
     apiMocks.saveAppSettings.mockResolvedValue(undefined);
+    apiMocks.deleteSetlist.mockResolvedValue(undefined);
     apiMocks.pickSetlistDirectory.mockResolvedValue(null);
     apiMocks.pickPresetDirectory.mockResolvedValue(null);
     apiMocks.listSetlists.mockResolvedValue([]);
@@ -160,7 +162,7 @@ describe("App desktop flows", () => {
     await waitFor(() => expect(apiMocks.listPresets).toHaveBeenCalledWith("/presets", false));
     expect(await screen.findByText("Boulevard")).toBeTruthy();
     expect(screen.getByText("/presets")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /delete/i })).toBeNull();
+    expect(screen.getByRole("button", { name: "Delete setlist Example" })).toBeTruthy();
   });
 
   it("opens the native save dialog directly for Save As", async () => {
@@ -312,6 +314,24 @@ describe("App desktop flows", () => {
     await waitFor(() => expect(apiMocks.loadSetlist).toHaveBeenCalledTimes(2));
     expect(screen.queryByText("Example *")).toBeNull();
     expect(within(screen.getByTestId("slot-row-0")).getByText("Original")).toBeTruthy();
+  });
+
+  it("moves a setlist to the recycle bin after confirmation", async () => {
+    apiMocks.loadAppSettings.mockResolvedValue({ setlistDirectory: "/setlists" });
+    apiMocks.listSetlists
+      .mockResolvedValueOnce([createLibraryEntry("Example", "/setlists/Example.hls")])
+      .mockResolvedValueOnce([]);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Delete setlist Example" }));
+    expect(await screen.findByText("Delete setlist")).toBeTruthy();
+    expect(screen.getByText("Move 'Example' to the recycle bin?")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => expect(apiMocks.deleteSetlist).toHaveBeenCalledWith("/setlists/Example.hls"));
+    await waitFor(() => expect(apiMocks.listSetlists).toHaveBeenLastCalledWith("/setlists", false));
   });
 
   it("toggles recursive scanning and shows relative directories in both panels", async () => {

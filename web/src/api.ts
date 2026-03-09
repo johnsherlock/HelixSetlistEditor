@@ -176,6 +176,10 @@ export async function saveSetlistAs(input: {
   });
 }
 
+export async function deleteSetlist(absolutePath: string): Promise<void> {
+  await invokeCommand<void>("move_file_to_trash", { absolutePath });
+}
+
 export async function loadBlankTemplate(): Promise<SetlistDraft> {
   const fileText = await invokeCommand<string>("load_blank_template");
   const decoded = decodeHlsFile<Record<string, unknown>>(fileText);

@@ -10,6 +10,7 @@ import {
   sortSetlistDraftAlphabetically,
 } from "../../src/domain/index.js";
 import {
+  deleteSetlist,
   listPresets,
   listSetlists,
   loadAppSettings,
@@ -40,6 +41,7 @@ type PendingReplace = {
     slotData: Record<string, unknown>;
   };
 } | null;
+type PendingDeleteSetlist = LibraryEntry | null;
 
 type DragSource =
   | { kind: "library-preset"; absolutePath: string }
@@ -206,6 +208,7 @@ export function App() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [pendingReplace, setPendingReplace] = useState<PendingReplace>(null);
+  const [pendingDeleteSetlist, setPendingDeleteSetlist] = useState<PendingDeleteSetlist>(null);
   const [showSortConfirm, setShowSortConfirm] = useState(false);
   const [showUnsavedModal, setShowUnsavedModal] = useState(false);
   const [dragSource, setDragSource] = useState<DragSource>(null);
@@ -852,6 +855,64 @@ export function App() {
     await createNewDraftFromTemplate();
   }
 
+  function handleRequestDeleteSetlist(entry: LibraryEntry): void {
+    setPendingDeleteSetlist(entry);
+  }
+
+  function handleCancelDeleteSetlist(): void {
+    setPendingDeleteSetlist(null);
+  }
+
+  async function handleConfirmDeleteSetlist(): Promise<void> {
+    if (!pendingDeleteSetlist) {
+      return;
+    }
+
+    const target = pendingDeleteSetlist;
+    setPendingDeleteSetlist(null);
+    setLoading(true);
+    setErrorMessage(null);
+
+    try {
+      await deleteSetlist(target.absolutePath);
+
+      if (!setlistDirectory) {
+        setSetlists([]);
+        if (activePath === target.absolutePath) {
+          setActivePath(null);
+          setDraft(null);
+          setDirty(false);
+        }
+        return;
+      }
+
+      const nextSetlists = await listSetlists(setlistDirectory, includeSetlistSubdirectories);
+      setSetlists(nextSetlists);
+
+      if (activePath !== target.absolutePath) {
+        return;
+      }
+
+      setPendingAction(null);
+      setShowUnsavedModal(false);
+      setPendingReplace(null);
+      setShowSortConfirm(false);
+      setDirty(false);
+
+      if (nextSetlists[0]) {
+        await loadIntoEditor(nextSetlists[0].absolutePath);
+        return;
+      }
+
+      setActivePath(null);
+      setDraft(null);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to move the setlist to Trash.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handleSaveAsCopy(reason: "manual" | "switch" = "manual"): Promise<boolean> {
     if (!draft) {
       return false;
@@ -948,6 +1009,18 @@ export function App() {
                       {entry.relativeDirectory}
                     </span>
                   ) : null}
+                </button>
+                <button
+                  className="remove-button"
+                  type="button"
+                  aria-label={`Delete setlist ${entry.name}`}
+                  title={`Delete ${entry.name}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleRequestDeleteSetlist(entry);
+                  }}
+                >
+                  x
                 </button>
               </div>
             ))}
@@ -1138,8 +1211,8 @@ export function App() {
         <div
           className="drag-preview"
           style={{
-            left: dragPointer.x + 14,
-            top: dragPointer.y + 14,
+            left: dragPointer.x +10,
+            top: dragPointer.y -15,
           }}
         >
           {dragPointer.label}
@@ -1219,6 +1292,23 @@ export function App() {
                 OK
               </button>
               <button className="ghost-button" onClick={handleCancelAlphabeticalSort}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {pendingDeleteSetlist ? (
+        <div className="modal-backdrop">
+          <div className="modal-card">
+            <h3>Delete setlist</h3>
+            <p>{`Move '${pendingDeleteSetlist.name}' to the recycle bin?`}</p>
+            <div className="modal-actions">
+              <button className="solid-button" onClick={() => void handleConfirmDeleteSetlist()}>
+                Delete
+              </button>
+              <button className="ghost-button" onClick={handleCancelDeleteSetlist}>
                 Cancel
               </button>
             </div>
