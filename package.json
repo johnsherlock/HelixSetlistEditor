@@ -12,6 +12,7 @@
     "release:check": "node scripts/assert-version-sync.mjs",
     "release:latest-json": "node scripts/generate-latest-json.mjs",
     "release:homebrew-cask": "node scripts/render-homebrew-cask.mjs",
+    "tauri:build:beta": "node scripts/tauri-build-beta.mjs",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "typecheck": "npm run typecheck:server && npm run typecheck:web",
