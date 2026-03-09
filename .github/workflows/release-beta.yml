@@ -1,0 +1,89 @@
+name: Release Beta
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos-beta:
+    runs-on: macos-14
+    env:
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify version sync
+        run: npm run release:check -- "${GITHUB_REF_NAME#v}"
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build macOS release
+        run: npm run tauri:build
+
+      - name: Prepare release assets
+        id: assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          mkdir -p release
+
+          DMG_PATH="$(find src-tauri/target/release/bundle -name '*.dmg' | head -n 1)"
+          APP_TAR_PATH="$(find src-tauri/target/release/bundle -name '*.app.tar.gz' | head -n 1)"
+          SIG_PATH="$(find src-tauri/target/release/bundle -name '*.app.tar.gz.sig' | head -n 1)"
+
+          test -n "$DMG_PATH"
+          test -n "$APP_TAR_PATH"
+          test -n "$SIG_PATH"
+
+          node scripts/generate-latest-json.mjs \
+            --version "$VERSION" \
+            --repo "$GITHUB_REPOSITORY" \
+            --tag "$GITHUB_REF_NAME" \
+            --platform-key "darwin-aarch64" \
+            --artifact "$APP_TAR_PATH" \
+            --signature-file "$SIG_PATH" \
+            --output "release/latest.json"
+
+          DMG_SHA="$(shasum -a 256 "$DMG_PATH" | awk '{print $1}')"
+
+          node scripts/render-homebrew-cask.mjs \
+            --version "$VERSION" \
+            --repo "$GITHUB_REPOSITORY" \
+            --sha256 "$DMG_SHA" \
+            --artifact-name "$(basename "$DMG_PATH")" \
+            --output "release/helix-setlist-editor.rb"
+
+          echo "dmg_path=$DMG_PATH" >> "$GITHUB_OUTPUT"
+          echo "app_tar_path=$APP_TAR_PATH" >> "$GITHUB_OUTPUT"
+          echo "sig_path=$SIG_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          prerelease: true
+          files: |
+            ${{ steps.assets.outputs.dmg_path }}
+            ${{ steps.assets.outputs.app_tar_path }}
+            ${{ steps.assets.outputs.sig_path }}
+            release/latest.json
+            release/helix-setlist-editor.rb

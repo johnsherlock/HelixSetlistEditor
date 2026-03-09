@@ -27,6 +27,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": "v1Compatible",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -37,5 +38,15 @@
     "resources": [
       "resources/Blank_Setlist.hls"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "dialog": false,
+      "endpoints": [
+        "https://github.com/johnsherlock/HelixSetlistEditor/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI5QjJFRThDODUwODJBMDEKUldRQktnaUZqTzZ5dVF0Ymo4L294K3haL01FUHFKVisyR1d3WGlHMlFLczlFRmZ0K0VGRFltZWEK"
+    }
   }
 }

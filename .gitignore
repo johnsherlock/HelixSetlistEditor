@@ -4,6 +4,7 @@ coverage/
 
 # Tauri / Rust build outputs
 src-tauri/target/
+.secrets/
 
 # TypeScript incremental state
 *.tsbuildinfo

@@ -1,71 +1,90 @@
 # Helix Setlist Editor
 
-Helix Setlist Editor is a local web app for working with Line 6 Helix setlist files (`.hls`) outside HX Edit.
+Helix Setlist Editor is a macOS desktop app for creating and editing Line 6 Helix setlist files (`.hls`) outside HX Edit.
 
-The goal of the project is to make Helix setlists editable as normal application data: open a setlist, inspect it, reorder presets, insert presets from exported `.hlx` files, remove presets, and save a valid `.hls` file that Helix can import.
+It can:
+- open existing `.hls` setlists
+- build new setlists from a bundled blank template
+- reorder, insert, replace, remove, and alphabetize presets
+- load `.hlx` preset files from a separate preset library directory
+- save valid `.hls` files that Helix can import
 
-## Intent
+## Beta Distribution
 
-This project exists to provide a practical setlist workflow for Helix users who want more control than HX Edit offers for bulk organization and file-based editing.
+This repo is set up for public beta distribution through:
 
-The app is built around a few verified assumptions:
+- GitHub Releases: direct `.dmg` download
+- Homebrew: your own tap with a cask that points at the GitHub Release `.dmg`
 
-- A `.hls` file is a JSON wrapper around base64-encoded, zlib-compressed inner JSON.
-- The inner JSON contains the real setlist data.
-- A valid `.hls` can be rebuilt by recompressing the inner JSON and recalculating `crc32` and `decompressed_size`.
-- Real-world round-trip import back into Helix has already been proven.
+The beta is currently **unsigned** and **not notarized**. On first launch, macOS may block it. If that happens:
 
-## Current Functionality
+1. open Finder
+2. right-click `Helix Setlist Editor.app`
+3. choose `Open`
+4. confirm the prompt
 
-The current app supports:
+## Auto Updates
 
-- Loading a Helix home directory with `/Setlists` and `/Presets`
-- Listing available `.hls` setlists and `.hlx` presets
-- Loading an existing setlist into the editor
-- Creating a new setlist draft from a blank `.hls` template
-- Editing the setlist name
-- Dirty-state tracking with save/discard prompts
-- Saving a setlist in place
-- Saving a setlist as a copy
-- Deleting a setlist from the UI with confirmation and file deletion on disk
-- Filtering presets by name
-- Dragging a preset from the preset library into the setlist
-- Reordering presets inside the setlist
-- Removing presets from the setlist with upward shift
-- Keeping the setlist fixed at 128 slots
-- Rebuilding valid `.hls` files through a separate codec layer
+The desktop app checks for updates on launch in production builds.
 
-## In Progress / Planned
+- If no update is available, nothing is shown.
+- If a newer release is available, the app prompts before downloading and installing it.
 
-Current follow-on work:
+Updater artifacts are published alongside each GitHub Release:
 
-- Better drag/drop polish
-- More fixture coverage across real `.hlx` and `.hls` samples
-- Undo/redo
-- Richer metadata editing
-- Deeper preset inspection
+- `.dmg` for direct install
+- `.app.tar.gz` and `.sig` for the Tauri updater
+- `latest.json` for update discovery
+
+## Homebrew
+
+The Homebrew cask is intended to live in your own public tap repo.
+
+Recommended install flow once the tap exists:
+
+```bash
+brew tap johnsherlock/tap
+brew install --cask helix-setlist-editor
+```
+
+This repo includes:
+
+- a release workflow that generates `release/helix-setlist-editor.rb`
+- helper docs in [packaging/homebrew/README.md](/Users/john/Documents/Projects/HelixSetlistEditor/packaging/homebrew/README.md)
+
+## Release Workflow
+
+The release workflow is in:
+
+- [.github/workflows/release-beta.yml](/Users/john/Documents/Projects/HelixSetlistEditor/.github/workflows/release-beta.yml)
+
+It builds the macOS app on a tag push, generates updater metadata, and publishes release assets to GitHub Releases.
+
+Required GitHub secrets:
+
+- `TAURI_SIGNING_PRIVATE_KEY`
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+
+Release checklist:
+
+- [docs/release-beta.md](/Users/john/Documents/Projects/HelixSetlistEditor/docs/release-beta.md)
 
 ## Tech Stack
 
-The app is split into a few small layers:
-
-- `TypeScript`: shared language across backend, frontend, and codec logic
-- `React`: local web UI
-- `Vite`: frontend development and production build
-- `Fastify`: local backend API for filesystem access and JSON endpoints
-- `Vitest`: unit and integration tests
-- `Node.js`: runtime for the codec and local server
+- `TypeScript`
+- `React`
+- `Vite`
+- `Tauri`
+- `Rust`
+- `Vitest`
 
 ## Architecture
 
-The codebase is organized to keep file-format logic separate from UI concerns.
-
-- [`src/core`](/Users/john/Documents/Projects/HelixSetlistEditor/src/core): `.hls` codec, decode/rebuild/validation logic
-- [`src/domain`](/Users/john/Documents/Projects/HelixSetlistEditor/src/domain): pure setlist editing operations such as insert, move, and remove
-- [`src/io`](/Users/john/Documents/Projects/HelixSetlistEditor/src/io): filesystem-backed Helix library services
-- [`src/server`](/Users/john/Documents/Projects/HelixSetlistEditor/src/server): Fastify API and local static serving
-- [`web/src`](/Users/john/Documents/Projects/HelixSetlistEditor/web/src): React UI
-- [`tests`](/Users/john/Documents/Projects/HelixSetlistEditor/tests): codec, domain, and API tests
+- [src/core](/Users/john/Documents/Projects/HelixSetlistEditor/src/core): `.hls` codec and validation logic
+- [src/domain](/Users/john/Documents/Projects/HelixSetlistEditor/src/domain): pure setlist operations
+- [src-tauri](/Users/john/Documents/Projects/HelixSetlistEditor/src-tauri): native desktop shell, filesystem bridge, bundling
+- [web/src](/Users/john/Documents/Projects/HelixSetlistEditor/web/src): React desktop UI
+- [tests](/Users/john/Documents/Projects/HelixSetlistEditor/tests): unit and UI tests
 
 ## Development
 
@@ -75,60 +94,57 @@ Install dependencies:
 npm install
 ```
 
-Type-check the project:
-
-```bash
-npm run typecheck
-```
-
-Run the test suite:
-
-```bash
-npm test
-```
-
-Build the server and frontend:
-
-```bash
-npm run build
-```
-
-Run the compiled app:
+Run the desktop app in dev mode:
 
 ```bash
 npm start
 ```
 
-`npm start` rebuilds the app first and then serves the current compiled output.
-
-If port `3000` is already in use:
+Type-check:
 
 ```bash
-PORT=3001 npm start
+npm run typecheck
 ```
 
-For frontend iteration with Vite:
+Run tests:
 
 ```bash
-npm run serve
-npm run dev:web
+npm test
 ```
 
-## Template Requirement
+Build the frontend bundle:
 
-The `New` action loads a blank setlist from:
+```bash
+npm run build
+```
 
-- `/Setlists/Blank Setlist.hls`
+Build the Tauri release bundle:
 
-That file is treated as the known-good template for new setlist drafts. If the selected Helix home directory does not contain that file, creating a new setlist will fail.
+```bash
+npm run tauri:build
+```
+
+## Versioning
+
+Release version numbers must stay aligned across:
+
+- [package.json](/Users/john/Documents/Projects/HelixSetlistEditor/package.json)
+- [src-tauri/Cargo.toml](/Users/john/Documents/Projects/HelixSetlistEditor/src-tauri/Cargo.toml)
+- [src-tauri/tauri.conf.json](/Users/john/Documents/Projects/HelixSetlistEditor/src-tauri/tauri.conf.json)
+
+Check alignment with:
+
+```bash
+npm run release:check -- v0.1.0
+```
 
 ## File Format Notes
 
-The `.hls` handling code is designed around these invariants:
+The app preserves these `.hls` invariants:
 
-- `schema` must remain valid for Helix setlists
-- `compression.type` must be `zlib`
+- `schema` remains valid for Helix setlists
+- `compression.type` remains `zlib`
 - `crc32` is computed from the decompressed inner JSON bytes
-- `decompressed_size` must exactly match the decompressed byte length
+- `decompressed_size` exactly matches the decompressed byte length
 
-That means UI operations do not write `.hls` files directly. They modify draft data, and the codec layer rebuilds the container correctly when saving.
+The UI edits draft JSON. The codec layer rebuilds the `.hls` container on save.

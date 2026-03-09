@@ -16,7 +16,10 @@ const setlistFixturePath = resolve(process.cwd(), "tests", "fixtures", "IMGL Fib
 const presetFixture = {
   relativePath: "Boulevard.hlx",
   name: "Boulevard",
-  slotData: JSON.parse(readFileSync("/Users/john/Documents/Line 6/Tones/Helix/Presets/Boulevard.hlx", "utf8")).data,
+  slotData: {
+    meta: { name: "Boulevard" },
+    tone: { dsp0: {} },
+  },
 };
 
 describe("setlist domain helpers", () => {

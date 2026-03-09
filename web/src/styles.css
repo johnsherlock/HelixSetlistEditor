@@ -124,6 +124,12 @@ input {
   margin: 0;
 }
 
+.modal-note {
+  margin: 0;
+  color: var(--muted);
+  white-space: pre-wrap;
+}
+
 .panel-meta {
   display: grid;
   gap: 10px;

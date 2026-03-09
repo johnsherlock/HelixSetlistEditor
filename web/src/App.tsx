@@ -24,6 +24,7 @@ import {
   saveSetlistAs,
 } from "./api";
 import type { AppSettings, LibraryEntry, SetlistDraft } from "./types";
+import { checkForAppUpdate, installAppUpdate, type AvailableAppUpdate } from "./updater";
 
 const NEW_SETLIST_DEFAULT_NAME = "New Setlist";
 
@@ -211,6 +212,9 @@ export function App() {
   const [pendingDeleteSetlist, setPendingDeleteSetlist] = useState<PendingDeleteSetlist>(null);
   const [showSortConfirm, setShowSortConfirm] = useState(false);
   const [showUnsavedModal, setShowUnsavedModal] = useState(false);
+  const [availableUpdate, setAvailableUpdate] = useState<AvailableAppUpdate | null>(null);
+  const [installingUpdate, setInstallingUpdate] = useState(false);
+  const [updateStatusMessage, setUpdateStatusMessage] = useState<string | null>(null);
   const [dragSource, setDragSource] = useState<DragSource>(null);
   const [activeDropTarget, setActiveDropTarget] = useState<DropTarget>(null);
   const [dragPointer, setDragPointer] = useState<DragPointerState>(null);
@@ -260,6 +264,22 @@ export function App() {
           setSettingsLoaded(true);
           setLoading(false);
         }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      const nextUpdate = await checkForAppUpdate();
+
+      if (!cancelled && nextUpdate) {
+        setAvailableUpdate(nextUpdate);
       }
     })();
 
@@ -962,6 +982,45 @@ export function App() {
     }
   }
 
+  function handleDismissUpdate(): void {
+    if (installingUpdate) {
+      return;
+    }
+
+    setAvailableUpdate(null);
+    setUpdateStatusMessage(null);
+  }
+
+  async function handleInstallUpdate(): Promise<void> {
+    if (!availableUpdate) {
+      return;
+    }
+
+    setInstallingUpdate(true);
+    setUpdateStatusMessage("Downloading update...");
+    setErrorMessage(null);
+
+    try {
+      await installAppUpdate(availableUpdate, (event) => {
+        if (event.event === "Started") {
+          setUpdateStatusMessage("Downloading update...");
+          return;
+        }
+
+        if (event.event === "Progress") {
+          setUpdateStatusMessage("Downloading update...");
+          return;
+        }
+
+        setUpdateStatusMessage("Installing update...");
+      });
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to install the available update.");
+      setInstallingUpdate(false);
+      setUpdateStatusMessage(null);
+    }
+  }
+
   return (
     <div className="shell">
       <aside className="sidebar">
@@ -1216,6 +1275,25 @@ export function App() {
           }}
         >
           {dragPointer.label}
+        </div>
+      ) : null}
+
+      {availableUpdate ? (
+        <div className="modal-backdrop">
+          <div className="modal-card">
+            <h3>Update available</h3>
+            <p>{`Version ${availableUpdate.version} is available. You are running ${availableUpdate.currentVersion}.`}</p>
+            {availableUpdate.body ? <p className="modal-note">{availableUpdate.body}</p> : null}
+            {updateStatusMessage ? <p className="modal-note">{updateStatusMessage}</p> : null}
+            <div className="modal-actions">
+              <button className="solid-button" onClick={() => void handleInstallUpdate()} disabled={installingUpdate}>
+                {installingUpdate ? "Installing..." : "Install update"}
+              </button>
+              <button className="ghost-button" onClick={handleDismissUpdate} disabled={installingUpdate}>
+                Later
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
 

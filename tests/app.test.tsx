@@ -19,7 +19,13 @@ const apiMocks = vi.hoisted(() => ({
   saveSetlistAs: vi.fn(),
 }));
 
+const updaterMocks = vi.hoisted(() => ({
+  checkForAppUpdate: vi.fn(),
+  installAppUpdate: vi.fn(),
+}));
+
 vi.mock("../web/src/api", () => apiMocks);
+vi.mock("../web/src/updater", () => updaterMocks);
 
 import { App } from "../web/src/App";
 
@@ -137,6 +143,8 @@ describe("App desktop flows", () => {
       modifiedAt: "",
       size: 100,
     });
+    updaterMocks.checkForAppUpdate.mockResolvedValue(null);
+    updaterMocks.installAppUpdate.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -183,6 +191,23 @@ describe("App desktop flows", () => {
       ),
     );
     expect(screen.queryByText("Save setlist copy")).toBeNull();
+  });
+
+  it("prompts for an app update found on launch and installs it on request", async () => {
+    updaterMocks.checkForAppUpdate.mockResolvedValue({
+      currentVersion: "0.1.0",
+      version: "0.1.1",
+      body: "Bug fixes",
+    });
+
+    render(<App />);
+
+    expect(await screen.findByText("Update available")).toBeTruthy();
+    expect(screen.getByText("Version 0.1.1 is available. You are running 0.1.0.")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Install update" }));
+
+    await waitFor(() => expect(updaterMocks.installAppUpdate).toHaveBeenCalled());
   });
 
   it("inserts a preset from the library when dropped on a gap", async () => {
@@ -318,9 +343,9 @@ describe("App desktop flows", () => {
 
   it("moves a setlist to the recycle bin after confirmation", async () => {
     apiMocks.loadAppSettings.mockResolvedValue({ setlistDirectory: "/setlists" });
-    apiMocks.listSetlists
-      .mockResolvedValueOnce([createLibraryEntry("Example", "/setlists/Example.hls")])
-      .mockResolvedValueOnce([]);
+    apiMocks.listSetlists.mockImplementation(async () =>
+      apiMocks.deleteSetlist.mock.calls.length > 0 ? [] : [createLibraryEntry("Example", "/setlists/Example.hls")],
+    );
 
     render(<App />);
 
