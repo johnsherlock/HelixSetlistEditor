@@ -173,6 +173,13 @@ function mockElementFromPoint(target: Element | null) {
   return stub;
 }
 
+async function clickSetlist(name: string) {
+  const label = await screen.findByText(name);
+  const button = label.closest("button");
+  expect(button).toBeTruthy();
+  fireEvent.click(button as HTMLElement);
+}
+
 describe("App desktop flows", () => {
   beforeEach(() => {
     apiMocks.loadAppSettings.mockResolvedValue({ hideWelcomeMessage: true });
@@ -238,7 +245,7 @@ describe("App desktop flows", () => {
 
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Example" }));
+    await clickSetlist("Example");
     await screen.findByDisplayValue("Example");
     fireEvent.click(screen.getByRole("button", { name: "Save As" }));
 
@@ -402,7 +409,7 @@ describe("App desktop flows", () => {
 
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Example" }));
+    await clickSetlist("Example");
     await screen.findByDisplayValue("Example");
     const presetRow = await screen.findByText("Dragged Preset");
     const gap = await screen.findByTestId("insert-gap-1");
@@ -430,7 +437,7 @@ describe("App desktop flows", () => {
 
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Example" }));
+    await clickSetlist("Example");
     await screen.findByDisplayValue("Example");
     const presetRow = await screen.findByText("Replacement");
     const elementFromPoint = mockElementFromPoint(null);
@@ -474,7 +481,7 @@ describe("App desktop flows", () => {
 
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Example" }));
+    await clickSetlist("Example");
     await screen.findByDisplayValue("Example");
     const row = await screen.findByTestId("slot-row-0");
     const gap = screen.getByTestId("insert-gap-3");
@@ -523,7 +530,7 @@ describe("App desktop flows", () => {
 
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Example" }));
+    await clickSetlist("Example");
     await screen.findByDisplayValue("Example");
     const nameInput = (await screen.findByLabelText("Name")) as HTMLInputElement;
     fireEvent.change(nameInput, { target: { value: "" } });
@@ -557,7 +564,7 @@ describe("App desktop flows", () => {
 
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Example" }));
+    await clickSetlist("Example");
     await screen.findByDisplayValue("Example");
     fireEvent.click(screen.getByRole("button", { name: "Sort setlist alphabetically" }));
     fireEvent.click(await screen.findByRole("button", { name: "OK" }));
@@ -636,7 +643,7 @@ describe("App desktop flows", () => {
 
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Example" }));
+    await clickSetlist("Example");
     await screen.findByDisplayValue("Example");
     fireEvent.click(screen.getByRole("button", { name: "Sort setlist alphabetically" }));
     expect(await screen.findByText("Sort setlist")).toBeTruthy();
