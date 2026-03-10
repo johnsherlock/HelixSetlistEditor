@@ -349,7 +349,12 @@ describe("App desktop flows", () => {
 
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Delete setlist Example" }));
+    const setlistRow = await screen.findByText("Example");
+    const rowContainer = setlistRow.closest(".list-row");
+
+    expect(rowContainer).toBeTruthy();
+
+    fireEvent.click(within(rowContainer as HTMLElement).getByRole("button", { name: "Delete setlist Example" }));
     expect(await screen.findByText("Delete setlist")).toBeTruthy();
     expect(screen.getByText("Move 'Example' to the recycle bin?")).toBeTruthy();
 
