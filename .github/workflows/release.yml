@@ -1,4 +1,4 @@
-name: Release Beta
+name: Release
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  build-macos-beta:
+  release-macos-beta:
     runs-on: macos-14
     env:
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -31,15 +31,19 @@ jobs:
         run: npm ci
 
       - name: Verify version sync
-        run: npm run release:check -- "${GITHUB_REF_NAME#v}"
+        run: npm run release:check -- "${GITHUB_REF_NAME}"
 
       - name: Run tests
         run: npm test
 
-      - name: Build macOS release
+      - name: Run native tests
+        run: cargo test
+        working-directory: src-tauri
+
+      - name: Build signed macOS release
         run: npm run tauri:build
 
-      - name: Prepare release assets
+      - name: Prepare updater metadata
         id: assets
         shell: bash
         run: |
@@ -64,15 +68,6 @@ jobs:
             --signature-file "$SIG_PATH" \
             --output "release/latest.json"
 
-          DMG_SHA="$(shasum -a 256 "$DMG_PATH" | awk '{print $1}')"
-
-          node scripts/render-homebrew-cask.mjs \
-            --version "$VERSION" \
-            --repo "$GITHUB_REPOSITORY" \
-            --sha256 "$DMG_SHA" \
-            --artifact-name "$(basename "$DMG_PATH")" \
-            --output "release/helix-setlist-editor.rb"
-
           echo "dmg_path=$DMG_PATH" >> "$GITHUB_OUTPUT"
           echo "app_tar_path=$APP_TAR_PATH" >> "$GITHUB_OUTPUT"
           echo "sig_path=$SIG_PATH" >> "$GITHUB_OUTPUT"
@@ -86,4 +81,3 @@ jobs:
             ${{ steps.assets.outputs.app_tar_path }}
             ${{ steps.assets.outputs.sig_path }}
             release/latest.json
-            release/helix-setlist-editor.rb

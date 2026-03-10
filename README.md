@@ -14,7 +14,6 @@ It can:
 This repo is set up for public beta distribution through:
 
 - GitHub Releases: direct `.dmg` download
-- Homebrew: your own tap with a cask that points at the GitHub Release `.dmg`
 
 The beta is currently **unsigned** and **not notarized**. On first launch, macOS may block it. If that happens:
 
@@ -36,29 +35,25 @@ Updater artifacts are published alongside each GitHub Release:
 - `.app.tar.gz` and `.sig` for the Tauri updater
 - `latest.json` for update discovery
 
-## Homebrew
-
-The Homebrew cask is intended to live in your own public tap repo.
-
-Recommended install flow once the tap exists:
-
-```bash
-brew tap johnsherlock/tap
-brew install --cask helix-setlist-editor
-```
-
-This repo includes:
-
-- a release workflow that generates `release/helix-setlist-editor.rb`
-- helper docs in [packaging/homebrew/README.md](/Users/john/Documents/Projects/HelixSetlistEditor/packaging/homebrew/README.md)
-
 ## Release Workflow
+
+The CI workflow is in:
+
+- [.github/workflows/ci.yml](/Users/john/Documents/Projects/HelixSetlistEditor/.github/workflows/ci.yml)
+
+It runs on pushes to `main` and pull requests and verifies:
+
+- version sync
+- type-checking
+- tests
+- frontend build
+- native Rust/Tauri tests
 
 The release workflow is in:
 
-- [.github/workflows/release-beta.yml](/Users/john/Documents/Projects/HelixSetlistEditor/.github/workflows/release-beta.yml)
+- [.github/workflows/release.yml](/Users/john/Documents/Projects/HelixSetlistEditor/.github/workflows/release.yml)
 
-It builds the macOS app on a tag push, generates updater metadata, and publishes release assets to GitHub Releases.
+It runs only on tag pushes, builds the macOS release, generates updater metadata, and publishes release assets to GitHub Releases.
 
 Required GitHub secrets:
 
@@ -122,6 +117,12 @@ Build the Tauri release bundle:
 
 ```bash
 npm run tauri:build
+```
+
+Build the signed local beta release bundle:
+
+```bash
+npm run tauri:build:beta
 ```
 
 ## Versioning

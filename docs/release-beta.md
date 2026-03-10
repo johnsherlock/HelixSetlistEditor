@@ -9,46 +9,42 @@
 3. The matching public updater key is already wired into:
    - `src-tauri/tauri.conf.json`
 
+## Merge to main
+
+Every merge to `main` now runs GitHub Actions CI:
+
+- version sync check
+- TypeScript type-check
+- Vitest suite
+- frontend build
+- native Rust/Tauri tests
+
+That validates the app continuously, but it does **not** publish a release.
+
 ## Per release
 
 1. Bump the version in:
    - `package.json`
    - `src-tauri/Cargo.toml`
    - `src-tauri/tauri.conf.json`
-2. Run:
-
-```bash
-npm install
-npm run release:check -- vX.Y.Z
-npm test
-npm run build
-```
-
-3. Commit the version bump.
-4. Create and push a tag:
+2. Commit and merge the version bump to `main`.
+3. Create and push a tag from that released commit:
 
 ```bash
 git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
 
-5. GitHub Actions will publish:
+4. GitHub Actions will publish:
    - the `.dmg`
    - the updater `.app.tar.gz` and `.sig`
    - `latest.json`
-   - a generated Homebrew cask file
-
-## Homebrew tap update
-
-1. Copy the generated `release/helix-setlist-editor.rb` into your public tap repo:
-   - `Casks/helix-setlist-editor.rb`
-2. Commit and push the tap update.
 
 ## Unsigned beta install note
 
 This app is currently unsigned and not notarized.
 
-Users installing directly from the `.dmg` or via Homebrew may need to:
+Users installing directly from the `.dmg` may need to:
 
 1. open Finder
 2. right-click `Helix Setlist Editor.app`

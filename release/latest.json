@@ -1,0 +1,11 @@
+{
+  "version": "0.1.0",
+  "notes": "Helix Setlist Editor 0.1.0",
+  "pub_date": "2026-03-10T00:02:11.561Z",
+  "platforms": {
+    "darwin-aarch64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRQktnaUZqTzZ5dWRZM3NQb29OenBCYWpybCtFSk4rQmN0MmI2R1Z3T3ZRdUtISUpsaGVSdEROenhzYTk0RWNUc3ZTOVAreFlPZnBlTTNFMGdyUE02MTFab3JSRTgwZ1F3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzczMTAwOTMxCWZpbGU6SGVsaXggU2V0bGlzdCBFZGl0b3IuYXBwLnRhci5negpIMExzRGxIVE9KSW1GN01QeVM2bGlWVVZEVVZlUmN4cXByTVgxMjlnTDgyT2hVekM0czg4TGl5UVY5dGNtWEJhT3B0UDFvYnJDOFpyQjMzKzZDNGtBQT09Cg==",
+      "url": "https://github.com/johnsherlock/HelixSetlistEditor/releases/download/v0.1.0/Helix%20Setlist%20Editor.app.tar.gz"
+    }
+  }
+}
