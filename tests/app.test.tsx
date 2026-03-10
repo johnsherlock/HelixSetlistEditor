@@ -663,7 +663,7 @@ describe("App desktop flows", () => {
 
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Example" }));
+    await clickSetlist("Example");
     await screen.findByDisplayValue("Example");
     fireEvent.click(screen.getByRole("button", { name: "Sort setlist alphabetically" }));
     expect(await screen.findByText("Sort setlist")).toBeTruthy();
