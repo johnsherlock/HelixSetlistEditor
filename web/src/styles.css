@@ -2,9 +2,11 @@
   color-scheme: dark;
   --bg: #101317;
   --bg-raised: rgba(16, 19, 23, 0.84);
-  --panel: rgba(24, 31, 37, 0.92);
+  /* --panel: rgba(24, 31, 37, 0.92); */
+  --panel: rgba(22, 35, 46, 0.92);
   --panel-border: rgba(210, 226, 201, 0.1);
   --text: #f6f3ea;
+  --driver-text: #333333;
   --muted: #aeb8b2;
   --accent: #8bdec3;
   --accent-strong: #d96a41;
@@ -125,7 +127,7 @@ input {
 }
 
 .modal-note {
-  margin: 0;
+  margin: 0;  
   color: var(--muted);
   white-space: pre-wrap;
 }
@@ -135,8 +137,8 @@ input {
 }
 
 .driver-popover.helix-guide-popover {
-  background: rgba(18, 24, 29, 0.96);
-  color: var(--text);
+  background:#dcbb50;
+  color: var(--driver-text);
   border: 1px solid var(--panel-border);
   border-radius: 18px;
   box-shadow: var(--shadow);
@@ -145,7 +147,7 @@ input {
 .driver-popover.helix-guide-popover .driver-popover-title,
 .driver-popover.helix-guide-popover .driver-popover-description,
 .driver-popover.helix-guide-popover .driver-popover-progress-text {
-  color: var(--text);
+  color: var(--driver-text);
 }
 
 .driver-popover.helix-guide-popover .driver-popover-description {
@@ -153,7 +155,7 @@ input {
 }
 
 .driver-popover.helix-guide-popover .driver-popover-arrow {
-  color: rgba(18, 24, 29, 0.96);
+  color:#fde047;
 }
 
 .driver-popover.helix-guide-popover .driver-popover-prev-btn,
@@ -161,8 +163,10 @@ input {
   background: rgba(8, 12, 16, 0.96);
   color: var(--text);
   border: 1px solid var(--panel-border);
-  border-radius: 999px;
+  border-radius: 6px;
   text-shadow: none;
+  flex: 1;
+  text-align: center;
 }
 
 .driver-popover.helix-guide-popover .driver-popover-prev-btn:hover,
@@ -203,7 +207,6 @@ input {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: var(--muted);
   font-size: 0.78rem;
 }
 

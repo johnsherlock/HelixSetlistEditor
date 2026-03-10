@@ -398,8 +398,8 @@ export function App() {
       disableActiveInteraction: true,
       popoverClass: "helix-guide-popover",
       showButtons: ["previous", "next"],
-      prevBtnText: "Previous",
-      nextBtnText: "Next",
+      prevBtnText: "← Previous",
+      nextBtnText: "Next →",
       doneBtnText: "Done",
       steps: [
         {
@@ -416,7 +416,7 @@ export function App() {
           popover: {
             title: "Setlists",
             description:
-              "Click here to select the directory where your setlists are stored on your local hard drive. Your setlists will be loaded and can be clicked on to view, edit or delete. Include subdirectories if your setlist are stored in a nested directory structure.",
+              "Select the directory where your setlists are stored on your local hard drive. You can view and delete setlists from here. Include subdirectories if your setlist are stored in a nested directory structure.",
           },
         },
         {
@@ -424,7 +424,7 @@ export function App() {
           popover: {
             title: "Presets",
             description:
-              "Click here to select the directory where your presets are stored on your local hard drive. Include subdirectories if your presets are stored in a nested directory structure. Filter your presets using the search.",
+              "Select the directory where your presets are stored on your local hard drive. Include subdirectories if your presets are stored in a nested directory structure. Filter your presets using the search.",
           },
         },
         {
@@ -432,7 +432,7 @@ export function App() {
           popover: {
             title: "Editor",
             description:
-              "Setlists are displayed here. Drag presets from your preset list into the position you want and rearrange the setlist as you need. Don't forget to give your setlist a good name!",
+              "Setlists are displayed here. Drag presets from your preset list into the position you want and rearrange as you need, or quickly sort it alphabetically. Don't forget to give your setlist a good name!",
           },
         },
         {
@@ -440,7 +440,7 @@ export function App() {
           popover: {
             title: "Actions",
             description:
-              "Click here to create a new setlist, save changes to an existing setlist, save your changes as a new setlist or reset changes you've made tor you setlist",
+              "Create a new setlist, save changes or reset changes you've made to your setlist!",
           },
         },
         {
