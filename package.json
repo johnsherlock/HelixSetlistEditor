@@ -10,6 +10,7 @@
     "dev:web": "vite",
     "preview:web": "vite preview",
     "release:check": "node scripts/assert-version-sync.mjs",
+    "release:prepare": "node scripts/release-prepare.mjs",
     "release:latest-json": "node scripts/generate-latest-json.mjs",
     "release:homebrew-cask": "node scripts/render-homebrew-cask.mjs",
     "tauri:build:beta": "node scripts/tauri-build-beta.mjs",

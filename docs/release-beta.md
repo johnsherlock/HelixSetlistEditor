@@ -23,19 +23,28 @@ That validates the app continuously, but it does **not** publish a release.
 
 ## Per release
 
-1. Bump the version in:
-   - `package.json`
-   - `src-tauri/Cargo.toml`
-   - `src-tauri/tauri.conf.json`
-2. Commit and merge the version bump to `main`.
-3. Create and push a tag from that released commit:
+1. Prepare the release commit and tag:
 
 ```bash
-git tag vX.Y.Z
+npm run release:prepare -- patch
+```
+
+This command will:
+- bump `package.json`
+- bump `package-lock.json`
+- bump `src-tauri/Cargo.toml`
+- bump `src-tauri/tauri.conf.json`
+- create a commit
+- create the matching git tag
+
+2. Push the commit and tag:
+
+```bash
+git push origin main
 git push origin vX.Y.Z
 ```
 
-4. GitHub Actions will publish:
+3. GitHub Actions will publish:
    - the `.dmg`
    - the updater `.app.tar.gz` and `.sig`
    - `latest.json`

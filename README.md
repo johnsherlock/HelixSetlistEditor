@@ -139,6 +139,12 @@ Check alignment with:
 npm run release:check -- v0.1.0
 ```
 
+Prepare the next release commit and tag automatically:
+
+```bash
+npm run release:prepare -- patch
+```
+
 ## File Format Notes
 
 The app preserves these `.hls` invariants:
