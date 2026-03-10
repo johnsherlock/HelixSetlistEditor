@@ -14,12 +14,145 @@ const MENU_RESET_APP_STATE: &str = "reset_app_state";
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+struct RuntimeInfo {
+    platform: String,
+    can_move_file_to_trash: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct LibraryEntry {
     name: String,
     absolute_path: String,
     relative_directory: String,
     modified_at: String,
     size: u64,
+}
+
+fn build_about_metadata(app: &tauri::AppHandle) -> AboutMetadata<'_> {
+    let pkg_info = app.package_info();
+    let config = app.config();
+
+    AboutMetadata {
+        name: Some(pkg_info.name.clone()),
+        version: Some(pkg_info.version.to_string()),
+        credits: Some(
+            "By John Sherlock\nSupport on Ko-fi: https://ko-fi.com/johnsherlock".to_string(),
+        ),
+        copyright: config.bundle.copyright.clone(),
+        authors: config.bundle.publisher.clone().map(|publisher| vec![publisher]),
+        ..Default::default()
+    }
+}
+
+fn build_app_menu(app: &tauri::AppHandle) -> Result<Menu<tauri::Wry>, tauri::Error> {
+    let pkg_info = app.package_info();
+    let about_metadata = build_about_metadata(app);
+    let show_intro_guide = MenuItem::with_id(
+        app,
+        MENU_SHOW_INTRO_GUIDE,
+        "Show Intro Guide Again",
+        true,
+        None::<&str>,
+    )?;
+    let reset_app_state = MenuItem::with_id(
+        app,
+        MENU_RESET_APP_STATE,
+        "Reset App State",
+        true,
+        None::<&str>,
+    )?;
+
+    #[cfg(target_os = "macos")]
+    {
+        return Menu::with_items(
+            app,
+            &[
+                &Submenu::with_items(
+                    app,
+                    pkg_info.name.clone(),
+                    true,
+                    &[
+                        &PredefinedMenuItem::about(app, None, Some(about_metadata.clone()))?,
+                        &PredefinedMenuItem::separator(app)?,
+                        &PredefinedMenuItem::services(app, None)?,
+                        &PredefinedMenuItem::separator(app)?,
+                        &PredefinedMenuItem::hide(app, None)?,
+                        &PredefinedMenuItem::hide_others(app, None)?,
+                        &PredefinedMenuItem::show_all(app, None)?,
+                        &PredefinedMenuItem::separator(app)?,
+                        &PredefinedMenuItem::quit(app, None)?,
+                    ],
+                )?,
+                &Submenu::with_items(
+                    app,
+                    "File",
+                    true,
+                    &[&PredefinedMenuItem::close_window(app, None)?],
+                )?,
+                &Submenu::with_items(
+                    app,
+                    "View",
+                    true,
+                    &[&PredefinedMenuItem::fullscreen(app, None)?],
+                )?,
+                &Submenu::with_items(
+                    app,
+                    "Window",
+                    true,
+                    &[
+                        &PredefinedMenuItem::minimize(app, None)?,
+                        &PredefinedMenuItem::maximize(app, None)?,
+                        &PredefinedMenuItem::separator(app)?,
+                        &PredefinedMenuItem::close_window(app, None)?,
+                    ],
+                )?,
+                &Submenu::with_items(
+                    app,
+                    "Help",
+                    true,
+                    &[
+                        &show_intro_guide,
+                        &reset_app_state,
+                        &PredefinedMenuItem::separator(app)?,
+                        &PredefinedMenuItem::about(app, None, Some(about_metadata))?,
+                    ],
+                )?,
+            ],
+        );
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        Menu::with_items(
+            app,
+            &[
+                &Submenu::with_items(
+                    app,
+                    "File",
+                    true,
+                    &[&PredefinedMenuItem::close_window(app, None)?],
+                )?,
+                &Submenu::with_items(
+                    app,
+                    "View",
+                    true,
+                    &[&PredefinedMenuItem::fullscreen(app, None)?],
+                )?,
+                &Submenu::with_items(
+                    app,
+                    "Help",
+                    true,
+                    &[
+                        &show_intro_guide,
+                        &reset_app_state,
+                        &PredefinedMenuItem::separator(app)?,
+                        &PredefinedMenuItem::about(app, None, Some(about_metadata))?,
+                    ],
+                )?,
+            ],
+        )
+    }
 }
 
 #[tauri::command]
@@ -161,6 +294,14 @@ fn move_file_to_trash(absolute_path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn get_runtime_info() -> RuntimeInfo {
+    RuntimeInfo {
+        platform: std::env::consts::OS.to_string(),
+        can_move_file_to_trash: cfg!(target_os = "macos"),
+    }
+}
+
+#[tauri::command]
 fn load_blank_template(app_handle: tauri::AppHandle) -> Result<String, String> {
     let resource_path = app_handle
         .path()
@@ -189,94 +330,7 @@ pub fn run() {
             app.handle()
                 .plugin(tauri_plugin_updater::Builder::new().build())?;
 
-            #[cfg(target_os = "macos")]
-            {
-                let pkg_info = app.package_info();
-                let config = app.config();
-                let about_metadata = AboutMetadata {
-                    name: Some(pkg_info.name.clone()),
-                    version: Some(pkg_info.version.to_string()),
-                    credits: Some(
-                        "By John Sherlock\nSupport on Ko-fi: https://ko-fi.com/johnsherlock"
-                            .to_string(),
-                    ),
-                    copyright: config.bundle.copyright.clone(),
-                    authors: config.bundle.publisher.clone().map(|publisher| vec![publisher]),
-                    ..Default::default()
-                };
-                let show_intro_guide = MenuItem::with_id(
-                    app,
-                    MENU_SHOW_INTRO_GUIDE,
-                    "Show Intro Guide Again",
-                    true,
-                    None::<&str>,
-                )?;
-                let reset_app_state = MenuItem::with_id(
-                    app,
-                    MENU_RESET_APP_STATE,
-                    "Reset App State",
-                    true,
-                    None::<&str>,
-                )?;
-
-                let menu = Menu::with_items(
-                    app,
-                    &[
-                        &Submenu::with_items(
-                            app,
-                            pkg_info.name.clone(),
-                            true,
-                            &[
-                                &PredefinedMenuItem::about(app, None, Some(about_metadata))?,
-                                &PredefinedMenuItem::separator(app)?,
-                                &PredefinedMenuItem::services(app, None)?,
-                                &PredefinedMenuItem::separator(app)?,
-                                &PredefinedMenuItem::hide(app, None)?,
-                                &PredefinedMenuItem::hide_others(app, None)?,
-                                &PredefinedMenuItem::show_all(app, None)?,
-                                &PredefinedMenuItem::separator(app)?,
-                                &PredefinedMenuItem::quit(app, None)?,
-                            ],
-                        )?,
-                        &Submenu::with_items(
-                            app,
-                            "File",
-                            true,
-                            &[&PredefinedMenuItem::close_window(app, None)?],
-                        )?,
-                        &Submenu::with_items(
-                            app,
-                            "View",
-                            true,
-                            &[&PredefinedMenuItem::fullscreen(app, None)?],
-                        )?,
-                        &Submenu::with_items(
-                            app,
-                            "Window",
-                            true,
-                            &[
-                                &PredefinedMenuItem::minimize(app, None)?,
-                                &PredefinedMenuItem::maximize(app, None)?,
-                                &PredefinedMenuItem::separator(app)?,
-                                &PredefinedMenuItem::close_window(app, None)?,
-                            ],
-                        )?,
-                        &Submenu::with_items(
-                            app,
-                            "Help",
-                            true,
-                            &[
-                                &show_intro_guide,
-                                &reset_app_state,
-                                &PredefinedMenuItem::separator(app)?,
-                                &PredefinedMenuItem::about(app, None, None)?,
-                            ],
-                        )?,
-                    ],
-                )?;
-
-                app.set_menu(menu)?;
-            }
+            app.set_menu(build_app_menu(app.handle())?)?;
 
             if let Some(window) = app.get_webview_window("main") {
                 let target_width = 1440.0;
@@ -301,7 +355,8 @@ pub fn run() {
             read_text_file,
             write_text_file,
             move_file_to_trash,
-            load_blank_template
+            load_blank_template,
+            get_runtime_info
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

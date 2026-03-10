@@ -1,6 +1,6 @@
 # Helix Setlist Editor
 
-Helix Setlist Editor is a macOS desktop app for creating and editing Line 6 Helix setlist files (`.hls`) outside HX Edit.
+Helix Setlist Editor is a desktop app for creating and editing Line 6 Helix setlist files (`.hls`) outside HX Edit.
 
 It can:
 - open existing `.hls` setlists
@@ -14,6 +14,7 @@ It can:
 This repo is set up for public beta distribution through:
 
 - GitHub Releases: direct `.dmg` download
+- GitHub Releases: direct `.msi` download for Windows
 
 The beta is currently **unsigned** and **not notarized**. On first launch, macOS may block it. If that happens:
 
@@ -53,7 +54,7 @@ The release workflow is in:
 
 - [.github/workflows/release.yml](/Users/john/Documents/Projects/HelixSetlistEditor/.github/workflows/release.yml)
 
-It runs only on tag pushes, builds the macOS release, generates updater metadata, and publishes release assets to GitHub Releases.
+It runs only on tag pushes, builds the macOS and Windows releases, generates updater metadata for macOS, and publishes release assets to GitHub Releases.
 
 Required GitHub secrets:
 
@@ -123,6 +124,12 @@ Build the signed local beta release bundle:
 
 ```bash
 npm run tauri:build:beta
+```
+
+Build a Windows MSI bundle:
+
+```bash
+npm run tauri:build:windows-msi
 ```
 
 ## Versioning

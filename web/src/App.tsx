@@ -13,6 +13,7 @@ import {
 } from "../../src/domain/index.js";
 import {
   deleteSetlist,
+  getRuntimeInfo,
   listPresets,
   listSetlists,
   loadAppSettings,
@@ -26,7 +27,7 @@ import {
   saveSetlist,
   saveSetlistAs,
 } from "./api";
-import type { AppSettings, LibraryEntry, SetlistDraft } from "./types";
+import type { AppSettings, LibraryEntry, RuntimeInfo, SetlistDraft } from "./types";
 import { checkForAppUpdate, installAppUpdate, type AvailableAppUpdate } from "./updater";
 
 type PendingAction =
@@ -237,6 +238,7 @@ export function App() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [runtimeInfo, setRuntimeInfo] = useState<RuntimeInfo | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [hideWelcomeMessage, setHideWelcomeMessage] = useState(false);
   const [guideActive, setGuideActive] = useState(false);
@@ -278,6 +280,7 @@ export function App() {
       ? "Save, save as a copy, or discard edits before creating a new setlist draft."
       : "Save, save as a copy, or discard edits before loading another setlist.";
   const fullPathLabel = activePath ?? "Unsaved setlist. Click Save to choose a file location.";
+  const canDeleteSetlists = runtimeInfo?.canMoveFileToTrash ?? false;
 
   useEffect(() => {
     document.title = title;
@@ -289,12 +292,13 @@ export function App() {
     void (async () => {
       setLoading(true);
       try {
-        const settings = await loadAppSettings();
+        const [settings, nextRuntimeInfo] = await Promise.all([loadAppSettings(), getRuntimeInfo()]);
 
         if (cancelled) {
           return;
         }
 
+        setRuntimeInfo(nextRuntimeInfo);
         setSetlistDirectory(settings.setlistDirectory ?? null);
         setPresetDirectory(settings.presetDirectory ?? null);
         setIncludeSetlistSubdirectories(settings.includeSetlistSubdirectories ?? false);
@@ -1137,6 +1141,10 @@ export function App() {
   }
 
   function handleRequestDeleteSetlist(entry: LibraryEntry): void {
+    if (!canDeleteSetlists) {
+      return;
+    }
+
     setPendingDeleteSetlist(entry);
   }
 
@@ -1334,18 +1342,20 @@ export function App() {
                     </span>
                   ) : null}
                 </button>
-                <button
-                  className="remove-button"
-                  type="button"
-                  aria-label={`Delete setlist ${entry.name}`}
-                  title={`Delete ${entry.name}`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    handleRequestDeleteSetlist(entry);
-                  }}
-                >
-                  x
-                </button>
+                {canDeleteSetlists ? (
+                  <button
+                    className="remove-button"
+                    type="button"
+                    aria-label={`Delete setlist ${entry.name}`}
+                    title={`Delete ${entry.name}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleRequestDeleteSetlist(entry);
+                    }}
+                  >
+                    x
+                  </button>
+                ) : null}
               </div>
             ))}
             {!setlistDirectory ? (

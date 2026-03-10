@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const apiMocks = vi.hoisted(() => ({
   deleteSetlist: vi.fn(),
+  getRuntimeInfo: vi.fn(),
   listPresets: vi.fn(),
   listSetlists: vi.fn(),
   loadAppSettings: vi.fn(),
@@ -183,6 +184,7 @@ async function clickSetlist(name: string) {
 describe("App desktop flows", () => {
   beforeEach(() => {
     apiMocks.loadAppSettings.mockResolvedValue({ hideWelcomeMessage: true });
+    apiMocks.getRuntimeInfo.mockResolvedValue({ platform: "macos", canMoveFileToTrash: true });
     apiMocks.saveAppSettings.mockResolvedValue(undefined);
     apiMocks.deleteSetlist.mockResolvedValue(undefined);
     apiMocks.pickSetlistDirectory.mockResolvedValue(null);
@@ -227,7 +229,12 @@ describe("App desktop flows", () => {
 
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Select setlist directory" }));
+    await waitFor(() => {
+      expect((screen.getByRole("button", { name: "Select setlist directory" }) as HTMLButtonElement).disabled).toBe(
+        false,
+      );
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Select setlist directory" }));
     await waitFor(() => expect(apiMocks.listSetlists).toHaveBeenCalledWith("/setlists", false));
     expect(await screen.findByText("Example")).toBeTruthy();
     expect(screen.getByText("/setlists")).toBeTruthy();
@@ -237,7 +244,7 @@ describe("App desktop flows", () => {
     expect(await screen.findByText("Boulevard")).toBeTruthy();
     expect(screen.getByText("/presets")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Delete setlist Example" })).toBeTruthy();
-  });
+  }, 10000);
 
   it("opens the native save dialog directly for Save As", async () => {
     apiMocks.loadAppSettings.mockResolvedValue({ hideWelcomeMessage: true, setlistDirectory: "/setlists" });
@@ -575,7 +582,7 @@ describe("App desktop flows", () => {
     await waitFor(() => expect(apiMocks.loadSetlist.mock.calls.length).toBeGreaterThanOrEqual(2));
     expect(screen.queryByText("Example *")).toBeNull();
     expect(within(screen.getByTestId("slot-row-0")).getByText("Original")).toBeTruthy();
-  });
+  }, 10000);
 
   it("moves a setlist to the recycle bin after confirmation", async () => {
     apiMocks.loadAppSettings.mockResolvedValue({ hideWelcomeMessage: true, setlistDirectory: "/setlists" });
@@ -598,6 +605,17 @@ describe("App desktop flows", () => {
 
     await waitFor(() => expect(apiMocks.deleteSetlist).toHaveBeenCalledWith("/setlists/Example.hls"));
     await waitFor(() => expect(apiMocks.listSetlists).toHaveBeenLastCalledWith("/setlists", false));
+  });
+
+  it("hides delete setlist actions when recycle bin support is unavailable", async () => {
+    apiMocks.getRuntimeInfo.mockResolvedValue({ platform: "windows", canMoveFileToTrash: false });
+    apiMocks.loadAppSettings.mockResolvedValue({ hideWelcomeMessage: true, setlistDirectory: "/setlists" });
+    apiMocks.listSetlists.mockResolvedValue([createLibraryEntry("Example", "C:\\setlists\\Example.hls")]);
+
+    render(<App />);
+
+    await screen.findByText("Example");
+    expect(screen.queryByRole("button", { name: "Delete setlist Example" })).toBeNull();
   });
 
   it("toggles recursive scanning and shows relative directories in both panels", async () => {

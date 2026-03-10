@@ -6,6 +6,7 @@ import type {
   AppSettings,
   LibraryEntry,
   LoadedPresetResponse,
+  RuntimeInfo,
   LoadedSetlistResponse,
   SetlistDraft,
 } from "./types";
@@ -178,6 +179,10 @@ export async function saveSetlistAs(input: {
 
 export async function deleteSetlist(absolutePath: string): Promise<void> {
   await invokeCommand<void>("move_file_to_trash", { absolutePath });
+}
+
+export async function getRuntimeInfo(): Promise<RuntimeInfo> {
+  return invokeCommand<RuntimeInfo>("get_runtime_info");
 }
 
 export async function loadBlankTemplate(): Promise<SetlistDraft> {

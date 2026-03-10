@@ -46,6 +46,7 @@ git push origin vX.Y.Z
 
 3. GitHub Actions will publish:
    - the `.dmg`
+   - the Windows `.msi`
    - the updater `.app.tar.gz` and `.sig`
    - `latest.json`
 
@@ -59,3 +60,8 @@ Users installing directly from the `.dmg` may need to:
 2. right-click `Helix Setlist Editor.app`
 3. choose `Open`
 4. confirm the Gatekeeper prompt
+
+## Windows beta note
+
+- The Windows release is distributed as an `.msi`.
+- The first Windows beta intentionally disables setlist deletion until recycle-bin support is implemented natively.

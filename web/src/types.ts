@@ -53,3 +53,8 @@ export interface AppSettings {
   includePresetSubdirectories?: boolean;
   hideWelcomeMessage?: boolean;
 }
+
+export interface RuntimeInfo {
+  platform: string;
+  canMoveFileToTrash: boolean;
+}

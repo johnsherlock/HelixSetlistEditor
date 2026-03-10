@@ -81,3 +81,52 @@ jobs:
             ${{ steps.assets.outputs.app_tar_path }}
             ${{ steps.assets.outputs.sig_path }}
             release/latest.json
+
+  release-windows-msi:
+    runs-on: windows-latest
+    env:
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify version sync
+        run: npm run release:check -- "${GITHUB_REF_NAME}"
+
+      - name: Run tests
+        run: npm test
+
+      - name: Run native tests
+        run: cargo test
+        working-directory: src-tauri
+
+      - name: Build Windows MSI release
+        run: npm run tauri:build:windows-msi
+
+      - name: Locate MSI asset
+        id: windows_assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          MSI_PATH="$(find src-tauri/target/release/bundle -name '*.msi' | head -n 1)"
+          test -n "$MSI_PATH"
+          echo "msi_path=$MSI_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Publish Windows MSI asset
+        uses: softprops/action-gh-release@v2
+        with:
+          prerelease: true
+          files: ${{ steps.windows_assets.outputs.msi_path }}
