@@ -44,6 +44,12 @@ git push origin main
 git push origin vX.Y.Z
 ```
 
+Or do all of that in one step from `main`:
+
+```bash
+npm run release:publish -- 0.1.3
+```
+
 3. GitHub Actions will publish:
    - the `.dmg`
    - the Windows `.msi`

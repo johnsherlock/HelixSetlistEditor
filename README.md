@@ -152,6 +152,20 @@ Prepare the next release commit and tag automatically:
 npm run release:prepare -- patch
 ```
 
+Prepare, commit, tag, and push a release in one command:
+
+```bash
+npm run release:publish -- 0.1.3
+```
+
+You can also use:
+
+```bash
+npm run release:publish -- patch
+```
+
+This must be run from the `main` branch.
+
 ## File Format Notes
 
 The app preserves these `.hls` invariants:
