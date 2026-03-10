@@ -184,7 +184,10 @@ pub fn run() {
                 let about_metadata = AboutMetadata {
                     name: Some(pkg_info.name.clone()),
                     version: Some(pkg_info.version.to_string()),
-                    credits: Some("By John Sherlock".to_string()),
+                    credits: Some(
+                        "By John Sherlock\nSupport on Ko-fi: https://ko-fi.com/johnsherlock"
+                            .to_string(),
+                    ),
                     copyright: config.bundle.copyright.clone(),
                     authors: config.bundle.publisher.clone().map(|publisher| vec![publisher]),
                     ..Default::default()

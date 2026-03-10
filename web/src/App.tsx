@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   getPresetNames,
@@ -25,8 +25,6 @@ import {
 } from "./api";
 import type { AppSettings, LibraryEntry, SetlistDraft } from "./types";
 import { checkForAppUpdate, installAppUpdate, type AvailableAppUpdate } from "./updater";
-
-const NEW_SETLIST_DEFAULT_NAME = "New Setlist";
 
 type PendingAction =
   | { kind: "switch-setlist"; absolutePath: string }
@@ -105,7 +103,7 @@ function stripExtension(fileName: string | null | undefined): string {
 
 function sanitizeFileNameSegment(value: string): string {
   const normalized = value.trim().replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ");
-  return normalized || NEW_SETLIST_DEFAULT_NAME;
+  return normalized;
 }
 
 function buildSuggestedSetlistFileName(draft: SetlistDraft | null, activePath: string | null): string {
@@ -137,6 +135,34 @@ function getSetlistName(draft: SetlistDraft | null): string {
   }
 
   return stripExtension(getFileName(draft.sourcePath));
+}
+
+function getEditableSetlistName(draft: SetlistDraft | null): string {
+  if (!draft) {
+    return "";
+  }
+
+  const innerMeta = asRecord(asRecord(draft.innerJson).meta);
+
+  if (typeof innerMeta.name === "string") {
+    return innerMeta.name;
+  }
+
+  const outerMeta = asRecord(draft.outerTemplate.meta);
+
+  if (typeof outerMeta.name === "string") {
+    return outerMeta.name;
+  }
+
+  return stripExtension(getFileName(draft.sourcePath));
+}
+
+function hasValidSetlistName(draft: SetlistDraft | null): boolean {
+  return getEditableSetlistName(draft).trim().length > 0;
+}
+
+function hasValidSetlistNameValue(name: string): boolean {
+  return name.trim().length > 0;
 }
 
 function setSetlistName(draft: SetlistDraft, name: string): SetlistDraft {
@@ -207,6 +233,11 @@ export function App() {
   const [saving, setSaving] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+  const [hideWelcomeMessage, setHideWelcomeMessage] = useState(false);
+  const [welcomeOptOut, setWelcomeOptOut] = useState(false);
+  const [nameValidationError, setNameValidationError] = useState(false);
+  const [setlistNameInput, setSetlistNameInput] = useState("");
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [pendingReplace, setPendingReplace] = useState<PendingReplace>(null);
   const [pendingDeleteSetlist, setPendingDeleteSetlist] = useState<PendingDeleteSetlist>(null);
@@ -219,6 +250,7 @@ export function App() {
   const [activeDropTarget, setActiveDropTarget] = useState<DropTarget>(null);
   const [dragPointer, setDragPointer] = useState<DragPointerState>(null);
   const [recentDropHighlight, setRecentDropHighlight] = useState<RecentDropHighlight>(null);
+  const setlistNameInputRef = useRef<HTMLInputElement>(null);
 
   const filteredPresets = useMemo(() => {
     const query = presetFilter.trim().toLowerCase();
@@ -232,7 +264,7 @@ export function App() {
 
   const slotLabels = useMemo(() => createSlotLabels(), []);
   const presetNames = useMemo(() => getPresetNames(draft), [draft]);
-  const title = `${getSetlistName(draft)}${dirty ? " *" : ""}`;
+  const title = `${getSetlistName(draft) || "Untitled Setlist"}${dirty ? " *" : ""}`;
   const unsavedPromptText =
     pendingAction?.kind === "new-draft"
       ? "Save, save as a copy, or discard edits before creating a new setlist draft."
@@ -259,6 +291,9 @@ export function App() {
         setPresetDirectory(settings.presetDirectory ?? null);
         setIncludeSetlistSubdirectories(settings.includeSetlistSubdirectories ?? false);
         setIncludePresetSubdirectories(settings.includePresetSubdirectories ?? false);
+        setHideWelcomeMessage(settings.hideWelcomeMessage ?? false);
+        setWelcomeOptOut(settings.hideWelcomeMessage ?? false);
+        setShowWelcomeModal(!settings.hideWelcomeMessage);
       } finally {
         if (!cancelled) {
           setSettingsLoaded(true);
@@ -298,8 +333,10 @@ export function App() {
       presetDirectory: presetDirectory ?? undefined,
       includeSetlistSubdirectories,
       includePresetSubdirectories,
+      hideWelcomeMessage,
     } satisfies AppSettings);
   }, [
+    hideWelcomeMessage,
     includePresetSubdirectories,
     includeSetlistSubdirectories,
     presetDirectory,
@@ -376,8 +413,10 @@ export function App() {
     try {
       const response = await loadSetlist(absolutePath);
       setDraft(cloneDraft(response.draft));
+      setSetlistNameInput(getEditableSetlistName(response.draft));
       setActivePath(absolutePath);
       setDirty(false);
+      setNameValidationError(false);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Failed to load the selected setlist.");
     } finally {
@@ -390,14 +429,16 @@ export function App() {
     setErrorMessage(null);
 
     try {
-      const nextDraft = setSetlistName(await loadBlankTemplate(), NEW_SETLIST_DEFAULT_NAME);
+      const nextDraft = setSetlistName(await loadBlankTemplate(), "");
 
       nextDraft.sourcePath = undefined;
 
       setDraft(nextDraft);
+      setSetlistNameInput("");
       setActivePath(null);
       setDirty(true);
       setPendingAction(null);
+      setNameValidationError(false);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Failed to create a new setlist.");
     } finally {
@@ -440,8 +481,14 @@ export function App() {
       return;
     }
 
-    setDraft(setSetlistName(draft, name.slice(0, 17)));
+    const nextName = name.slice(0, 17);
+
+    setDraft(setSetlistName(draft, nextName));
+    setSetlistNameInput(nextName);
     setDirty(true);
+    if (nextName.trim()) {
+      setNameValidationError(false);
+    }
   }
 
   function beginPointerDrag(source: DragSource, clientX: number, clientY: number, label: string): void {
@@ -784,8 +831,23 @@ export function App() {
     setShowSortConfirm(false);
   }
 
+  function ensureValidSetlistName(): boolean {
+    if (hasValidSetlistNameValue(setlistNameInput) && hasValidSetlistName(draft)) {
+      return true;
+    }
+
+    setNameValidationError(true);
+    setErrorMessage(null);
+    setlistNameInputRef.current?.focus();
+    return false;
+  }
+
   async function handleSave(): Promise<boolean> {
     if (!draft) {
+      return false;
+    }
+
+    if (!ensureValidSetlistName()) {
       return false;
     }
 
@@ -938,6 +1000,10 @@ export function App() {
       return false;
     }
 
+    if (!ensureValidSetlistName()) {
+      return false;
+    }
+
     setSaving(true);
     setErrorMessage(null);
 
@@ -989,6 +1055,14 @@ export function App() {
 
     setAvailableUpdate(null);
     setUpdateStatusMessage(null);
+  }
+
+  function handleDismissWelcome(): void {
+    setShowWelcomeModal(false);
+
+    if (welcomeOptOut) {
+      setHideWelcomeMessage(true);
+    }
   }
 
   async function handleInstallUpdate(): Promise<void> {
@@ -1187,12 +1261,13 @@ export function App() {
         <section className="editor-panel">
           <div className="title-row">
             <label className="field-label title-label" htmlFor="setlist-name-input">
-              Setlist Name
+              Name
             </label>
             <input
+              ref={setlistNameInputRef}
               id="setlist-name-input"
-              className="title-input"
-              value={getSetlistName(draft)}
+              className={`title-input ${nameValidationError ? "invalid" : ""}`}
+              value={setlistNameInput}
               onChange={(event) => handleNameChange(event.target.value)}
               disabled={!draft}
               placeholder="Setlist name"
@@ -1278,7 +1353,30 @@ export function App() {
         </div>
       ) : null}
 
-      {availableUpdate ? (
+      {showWelcomeModal ? (
+        <div className="modal-backdrop">
+          <div className="modal-card">
+            <h3>Welcome</h3>
+            <p>Choose a setlist directory if you want to browse existing `.hls` setlists, and choose a preset directory to browse your `.hlx` files.</p>
+            <p>Create a new setlist or open an existing one, drag presets into the setlist or reorder them, then save when you are finished.</p>
+            <label className="subdir-toggle modal-checkbox">
+              <input
+                type="checkbox"
+                checked={welcomeOptOut}
+                onChange={(event) => setWelcomeOptOut(event.target.checked)}
+              />
+              <span>Do not show this again</span>
+            </label>
+            <div className="modal-actions">
+              <button className="solid-button" onClick={handleDismissWelcome}>
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {availableUpdate && !showWelcomeModal ? (
         <div className="modal-backdrop">
           <div className="modal-card">
             <h3>Update available</h3>

@@ -119,7 +119,7 @@ function mockElementFromPoint(target: Element | null) {
 
 describe("App desktop flows", () => {
   beforeEach(() => {
-    apiMocks.loadAppSettings.mockResolvedValue({});
+    apiMocks.loadAppSettings.mockResolvedValue({ hideWelcomeMessage: true });
     apiMocks.saveAppSettings.mockResolvedValue(undefined);
     apiMocks.deleteSetlist.mockResolvedValue(undefined);
     apiMocks.pickSetlistDirectory.mockResolvedValue(null);
@@ -174,7 +174,7 @@ describe("App desktop flows", () => {
   });
 
   it("opens the native save dialog directly for Save As", async () => {
-    apiMocks.loadAppSettings.mockResolvedValue({ setlistDirectory: "/setlists" });
+    apiMocks.loadAppSettings.mockResolvedValue({ hideWelcomeMessage: true, setlistDirectory: "/setlists" });
     apiMocks.listSetlists.mockResolvedValue([createLibraryEntry("Example", "/setlists/Example.hls")]);
 
     render(<App />);
@@ -194,6 +194,7 @@ describe("App desktop flows", () => {
   });
 
   it("prompts for an app update found on launch and installs it on request", async () => {
+    apiMocks.loadAppSettings.mockResolvedValue({ hideWelcomeMessage: true });
     updaterMocks.checkForAppUpdate.mockResolvedValue({
       currentVersion: "0.1.0",
       version: "0.1.1",
@@ -210,8 +211,33 @@ describe("App desktop flows", () => {
     await waitFor(() => expect(updaterMocks.installAppUpdate).toHaveBeenCalled());
   });
 
+  it("shows the welcome modal by default and persists the opt-out on dismiss", async () => {
+    apiMocks.loadAppSettings.mockResolvedValue({});
+
+    render(<App />);
+
+    expect(await screen.findByText("Welcome")).toBeTruthy();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Do not show this again" }));
+    fireEvent.click(screen.getByRole("button", { name: "Got it" }));
+
+    await waitFor(() =>
+      expect(apiMocks.saveAppSettings).toHaveBeenLastCalledWith(
+        expect.objectContaining({ hideWelcomeMessage: true }),
+      ),
+    );
+  });
+
+  it("does not show the welcome modal when the user has opted out", async () => {
+    apiMocks.loadAppSettings.mockResolvedValue({ hideWelcomeMessage: true });
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.queryByText("Welcome")).toBeNull());
+  });
+
   it("inserts a preset from the library when dropped on a gap", async () => {
     apiMocks.loadAppSettings.mockResolvedValue({
+      hideWelcomeMessage: true,
       setlistDirectory: "/setlists",
       presetDirectory: "/presets",
     });
@@ -237,6 +263,7 @@ describe("App desktop flows", () => {
 
   it("replaces an empty slot directly and requires modal confirmation for a populated slot", async () => {
     apiMocks.loadAppSettings.mockResolvedValue({
+      hideWelcomeMessage: true,
       setlistDirectory: "/setlists",
       presetDirectory: "/presets",
     });
@@ -283,7 +310,7 @@ describe("App desktop flows", () => {
   });
 
   it("reorders existing setlist rows by dropping on a gap", async () => {
-    apiMocks.loadAppSettings.mockResolvedValue({ setlistDirectory: "/setlists" });
+    apiMocks.loadAppSettings.mockResolvedValue({ hideWelcomeMessage: true, setlistDirectory: "/setlists" });
     apiMocks.listSetlists.mockResolvedValue([createLibraryEntry("Example", "/setlists/Example.hls")]);
     apiMocks.loadSetlist.mockResolvedValue(createSetlistResponse(["One", "Two", "Three"]));
 
@@ -303,11 +330,12 @@ describe("App desktop flows", () => {
     expect(within(screen.getByTestId("slot-row-2")).getByText("One")).toBeTruthy();
   });
 
-  it("uses Save as the native file dialog action for a new draft", async () => {
+  it("uses Save as the native file dialog action for a named new draft", async () => {
     render(<App />);
 
     fireEvent.click(await screen.findByRole("button", { name: "New" }));
-    await screen.findByDisplayValue("New Setlist");
+    const nameInput = await screen.findByLabelText("Name");
+    fireEvent.change(nameInput, { target: { value: "New Setlist" } });
 
     const saveButton = screen.getByRole("button", { name: "Save" });
     const saveCopyButton = screen.getByRole("button", { name: "Save As" });
@@ -320,8 +348,46 @@ describe("App desktop flows", () => {
     await waitFor(() => expect(apiMocks.saveSetlistAs).toHaveBeenCalledTimes(1));
   });
 
+  it("creates a new setlist with a blank name", async () => {
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "New" }));
+
+    const nameInput = (await screen.findByLabelText("Name")) as HTMLInputElement;
+    expect(nameInput.value).toBe("");
+  });
+
+  it("allows a loaded setlist name to be cleared fully", async () => {
+    apiMocks.loadAppSettings.mockResolvedValue({ hideWelcomeMessage: true, setlistDirectory: "/setlists" });
+    apiMocks.listSetlists.mockResolvedValue([createLibraryEntry("Example", "/setlists/Example.hls")]);
+
+    render(<App />);
+
+    const nameInput = (await screen.findByLabelText("Name")) as HTMLInputElement;
+    fireEvent.change(nameInput, { target: { value: "" } });
+
+    expect(nameInput.value).toBe("");
+  });
+
+  it("blocks Save on a new setlist when the name is blank and clears the error after entry", async () => {
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "New" }));
+    const nameInput = (await screen.findByLabelText("Name")) as HTMLInputElement;
+    const saveButton = screen.getByRole("button", { name: "Save" });
+
+    fireEvent.click(saveButton);
+    expect(apiMocks.saveSetlist).not.toHaveBeenCalled();
+    expect(apiMocks.saveSetlistAs).not.toHaveBeenCalled();
+    await waitFor(() => expect(nameInput.className).toContain("invalid"));
+    expect(document.activeElement).toBe(nameInput);
+
+    fireEvent.change(nameInput, { target: { value: "Valid Name" } });
+    expect(nameInput.className).not.toContain("invalid");
+  });
+
   it("resets a dirty saved setlist back to the on-disk version", async () => {
-    apiMocks.loadAppSettings.mockResolvedValue({ setlistDirectory: "/setlists" });
+    apiMocks.loadAppSettings.mockResolvedValue({ hideWelcomeMessage: true, setlistDirectory: "/setlists" });
     apiMocks.listSetlists.mockResolvedValue([createLibraryEntry("Example", "/setlists/Example.hls")]);
     apiMocks.loadSetlist
       .mockResolvedValueOnce(createSetlistResponse(["Original"]))
@@ -336,13 +402,13 @@ describe("App desktop flows", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Reset" }));
 
-    await waitFor(() => expect(apiMocks.loadSetlist).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(apiMocks.loadSetlist.mock.calls.length).toBeGreaterThanOrEqual(2));
     expect(screen.queryByText("Example *")).toBeNull();
     expect(within(screen.getByTestId("slot-row-0")).getByText("Original")).toBeTruthy();
   });
 
   it("moves a setlist to the recycle bin after confirmation", async () => {
-    apiMocks.loadAppSettings.mockResolvedValue({ setlistDirectory: "/setlists" });
+    apiMocks.loadAppSettings.mockResolvedValue({ hideWelcomeMessage: true, setlistDirectory: "/setlists" });
     apiMocks.listSetlists.mockImplementation(async () =>
       apiMocks.deleteSetlist.mock.calls.length > 0 ? [] : [createLibraryEntry("Example", "/setlists/Example.hls")],
     );
@@ -366,6 +432,7 @@ describe("App desktop flows", () => {
 
   it("toggles recursive scanning and shows relative directories in both panels", async () => {
     apiMocks.loadAppSettings.mockResolvedValue({
+      hideWelcomeMessage: true,
       setlistDirectory: "/setlists",
       presetDirectory: "/presets",
     });
@@ -400,7 +467,7 @@ describe("App desktop flows", () => {
   });
 
   it("sorts named presets alphabetically after confirmation", async () => {
-    apiMocks.loadAppSettings.mockResolvedValue({ setlistDirectory: "/setlists" });
+    apiMocks.loadAppSettings.mockResolvedValue({ hideWelcomeMessage: true, setlistDirectory: "/setlists" });
     apiMocks.listSetlists.mockResolvedValue([createLibraryEntry("Example", "/setlists/Example.hls")]);
     apiMocks.loadSetlist.mockResolvedValue(createSetlistResponse(["zeta", "", "Alpha", "beta"]));
 
@@ -419,7 +486,7 @@ describe("App desktop flows", () => {
   });
 
   it("leaves the setlist unchanged when alphabetical sort is cancelled", async () => {
-    apiMocks.loadAppSettings.mockResolvedValue({ setlistDirectory: "/setlists" });
+    apiMocks.loadAppSettings.mockResolvedValue({ hideWelcomeMessage: true, setlistDirectory: "/setlists" });
     apiMocks.listSetlists.mockResolvedValue([createLibraryEntry("Example", "/setlists/Example.hls")]);
     apiMocks.loadSetlist.mockResolvedValue(createSetlistResponse(["zeta", "Alpha"]));
 

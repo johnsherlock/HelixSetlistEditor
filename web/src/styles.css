@@ -130,6 +130,10 @@ input {
   white-space: pre-wrap;
 }
 
+.modal-checkbox {
+  margin-top: 6px;
+}
+
 .panel-meta {
   display: grid;
   gap: 10px;
@@ -232,6 +236,11 @@ input {
 .title-input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(139, 222, 195, 0.14);
+}
+
+.title-input.invalid {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px rgba(241, 138, 122, 0.14);
 }
 
 .title-input {

@@ -51,4 +51,5 @@ export interface AppSettings {
   presetDirectory?: string;
   includeSetlistSubdirectories?: boolean;
   includePresetSubdirectories?: boolean;
+  hideWelcomeMessage?: boolean;
 }
