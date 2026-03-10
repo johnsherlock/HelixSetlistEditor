@@ -10,11 +10,17 @@ if (!INPUT) {
 }
 
 function run(command, args, options = {}) {
-  return execFileSync(command, args, {
+  const result = execFileSync(command, args, {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
     ...options,
-  }).trim();
+  });
+
+  if (typeof result !== "string") {
+    return "";
+  }
+
+  return result.trim();
 }
 
 function ensureCleanWorktree() {
