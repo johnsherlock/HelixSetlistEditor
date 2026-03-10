@@ -4,10 +4,13 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::time::UNIX_EPOCH;
 use tauri::{
-    menu::{AboutMetadata, Menu, PredefinedMenuItem, Submenu},
-    LogicalSize, Manager, Size,
+    menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu},
+    Emitter, LogicalSize, Manager, Size,
 };
 use walkdir::WalkDir;
+
+const MENU_SHOW_INTRO_GUIDE: &str = "show_intro_guide";
+const MENU_RESET_APP_STATE: &str = "reset_app_state";
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -172,6 +175,15 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
+        .on_menu_event(|app, event| match event.id().0.as_str() {
+            MENU_SHOW_INTRO_GUIDE => {
+                let _ = app.emit("app://show-intro-guide", ());
+            }
+            MENU_RESET_APP_STATE => {
+                let _ = app.emit("app://reset-app-state", ());
+            }
+            _ => {}
+        })
         .setup(|app| {
             #[cfg(desktop)]
             app.handle()
@@ -192,6 +204,20 @@ pub fn run() {
                     authors: config.bundle.publisher.clone().map(|publisher| vec![publisher]),
                     ..Default::default()
                 };
+                let show_intro_guide = MenuItem::with_id(
+                    app,
+                    MENU_SHOW_INTRO_GUIDE,
+                    "Show Intro Guide Again",
+                    true,
+                    None::<&str>,
+                )?;
+                let reset_app_state = MenuItem::with_id(
+                    app,
+                    MENU_RESET_APP_STATE,
+                    "Reset App State",
+                    true,
+                    None::<&str>,
+                )?;
 
                 let menu = Menu::with_items(
                     app,
@@ -239,7 +265,12 @@ pub fn run() {
                             app,
                             "Help",
                             true,
-                            &[&PredefinedMenuItem::about(app, None, None)?],
+                            &[
+                                &show_intro_guide,
+                                &reset_app_state,
+                                &PredefinedMenuItem::separator(app)?,
+                                &PredefinedMenuItem::about(app, None, None)?,
+                            ],
                         )?,
                     ],
                 )?;

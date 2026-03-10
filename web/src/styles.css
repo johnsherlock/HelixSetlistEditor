@@ -134,6 +134,42 @@ input {
   margin-top: 6px;
 }
 
+.driver-popover.helix-guide-popover {
+  background: rgba(18, 24, 29, 0.96);
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+}
+
+.driver-popover.helix-guide-popover .driver-popover-title,
+.driver-popover.helix-guide-popover .driver-popover-description,
+.driver-popover.helix-guide-popover .driver-popover-progress-text {
+  color: var(--text);
+}
+
+.driver-popover.helix-guide-popover .driver-popover-description {
+  line-height: 1.5;
+}
+
+.driver-popover.helix-guide-popover .driver-popover-arrow {
+  color: rgba(18, 24, 29, 0.96);
+}
+
+.driver-popover.helix-guide-popover .driver-popover-prev-btn,
+.driver-popover.helix-guide-popover .driver-popover-next-btn {
+  background: rgba(8, 12, 16, 0.96);
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  text-shadow: none;
+}
+
+.driver-popover.helix-guide-popover .driver-popover-prev-btn:hover,
+.driver-popover.helix-guide-popover .driver-popover-next-btn:hover {
+  background: rgba(19, 26, 31, 0.96);
+}
+
 .panel-meta {
   display: grid;
   gap: 10px;

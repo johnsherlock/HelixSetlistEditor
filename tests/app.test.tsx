@@ -14,6 +14,7 @@ const apiMocks = vi.hoisted(() => ({
   loadSetlist: vi.fn(),
   pickPresetDirectory: vi.fn(),
   pickSetlistDirectory: vi.fn(),
+  resetAppSettings: vi.fn(),
   saveAppSettings: vi.fn(),
   saveSetlist: vi.fn(),
   saveSetlistAs: vi.fn(),
@@ -24,8 +25,63 @@ const updaterMocks = vi.hoisted(() => ({
   installAppUpdate: vi.fn(),
 }));
 
+const driverMocks = vi.hoisted(() => {
+  const state: { config?: Record<string, unknown> } = {};
+  const instance = {
+    isActive: vi.fn(() => false),
+    refresh: vi.fn(),
+    drive: vi.fn(),
+    setConfig: vi.fn(),
+    setSteps: vi.fn(),
+    getConfig: vi.fn(),
+    getState: vi.fn(() => ({})),
+    getActiveIndex: vi.fn(),
+    isFirstStep: vi.fn(),
+    isLastStep: vi.fn(),
+    getActiveStep: vi.fn(),
+    getActiveElement: vi.fn(),
+    getPreviousElement: vi.fn(),
+    getPreviousStep: vi.fn(),
+    moveNext: vi.fn(),
+    movePrevious: vi.fn(),
+    moveTo: vi.fn(),
+    hasNextStep: vi.fn(),
+    hasPreviousStep: vi.fn(),
+    highlight: vi.fn(),
+    destroy: vi.fn(),
+  };
+
+  return {
+    state,
+    instance,
+    driver: vi.fn((config?: Record<string, unknown>) => {
+      state.config = config;
+      return instance;
+    }),
+  };
+});
+
+const eventMocks = vi.hoisted(() => {
+  const handlers = new Map<string, () => void>();
+
+  return {
+    handlers,
+    listen: vi.fn(async (event: string, handler: () => void) => {
+      handlers.set(event, handler);
+      return () => {
+        handlers.delete(event);
+      };
+    }),
+    emit(event: string) {
+      handlers.get(event)?.();
+    },
+  };
+});
+
 vi.mock("../web/src/api", () => apiMocks);
 vi.mock("../web/src/updater", () => updaterMocks);
+vi.mock("driver.js", () => ({ driver: driverMocks.driver }));
+vi.mock("@tauri-apps/api/event", () => ({ listen: eventMocks.listen }));
 
 import { App } from "../web/src/App";
 
@@ -124,6 +180,7 @@ describe("App desktop flows", () => {
     apiMocks.deleteSetlist.mockResolvedValue(undefined);
     apiMocks.pickSetlistDirectory.mockResolvedValue(null);
     apiMocks.pickPresetDirectory.mockResolvedValue(null);
+    apiMocks.resetAppSettings.mockResolvedValue(undefined);
     apiMocks.listSetlists.mockResolvedValue([]);
     apiMocks.listPresets.mockResolvedValue([]);
     apiMocks.loadBlankTemplate.mockResolvedValue(createDraft());
@@ -145,6 +202,8 @@ describe("App desktop flows", () => {
     });
     updaterMocks.checkForAppUpdate.mockResolvedValue(null);
     updaterMocks.installAppUpdate.mockResolvedValue(undefined);
+    driverMocks.state.config = undefined;
+    eventMocks.handlers.clear();
   });
 
   afterEach(() => {
@@ -179,6 +238,7 @@ describe("App desktop flows", () => {
 
     render(<App />);
 
+    fireEvent.click(await screen.findByRole("button", { name: "Example" }));
     await screen.findByDisplayValue("Example");
     fireEvent.click(screen.getByRole("button", { name: "Save As" }));
 
@@ -211,14 +271,46 @@ describe("App desktop flows", () => {
     await waitFor(() => expect(updaterMocks.installAppUpdate).toHaveBeenCalled());
   });
 
-  it("shows the welcome modal by default and persists the opt-out on dismiss", async () => {
+  it("starts the guided intro by default and persists the opt-out on completion", async () => {
     apiMocks.loadAppSettings.mockResolvedValue({});
 
     render(<App />);
 
-    expect(await screen.findByText("Welcome")).toBeTruthy();
-    fireEvent.click(screen.getByRole("checkbox", { name: "Do not show this again" }));
-    fireEvent.click(screen.getByRole("button", { name: "Got it" }));
+    await waitFor(() => expect(driverMocks.driver).toHaveBeenCalledTimes(1));
+    expect(driverMocks.instance.drive).toHaveBeenCalledTimes(1);
+    expect(driverMocks.state.config).toEqual(
+      expect.objectContaining({
+        allowClose: false,
+        allowKeyboardControl: false,
+        showButtons: ["previous", "next"],
+      }),
+    );
+
+    const popover = {
+      wrapper: document.createElement("div"),
+      arrow: document.createElement("div"),
+      title: document.createElement("div"),
+      description: document.createElement("div"),
+      footer: document.createElement("div"),
+      progress: document.createElement("div"),
+      previousButton: document.createElement("button"),
+      nextButton: document.createElement("button"),
+      closeButton: document.createElement("button"),
+      footerButtons: document.createElement("div"),
+    };
+    popover.wrapper.appendChild(popover.title);
+    popover.wrapper.appendChild(popover.description);
+    popover.wrapper.appendChild(popover.footer);
+    const config = driverMocks.state.config as {
+      onPopoverRender?: (popover: typeof popover, opts: { state: { activeIndex: number } }) => void;
+      onDestroyed?: () => void;
+    };
+    config.onPopoverRender?.(popover, { state: { activeIndex: 5 } });
+
+    const optOutCheckbox = popover.wrapper.querySelector("input[type='checkbox']") as HTMLInputElement;
+    expect(optOutCheckbox).toBeTruthy();
+    fireEvent.change(optOutCheckbox, { target: { checked: true } });
+    config.onDestroyed?.();
 
     await waitFor(() =>
       expect(apiMocks.saveAppSettings).toHaveBeenLastCalledWith(
@@ -227,12 +319,74 @@ describe("App desktop flows", () => {
     );
   });
 
-  it("does not show the welcome modal when the user has opted out", async () => {
+  it("does not start the guided intro when the user has opted out", async () => {
     apiMocks.loadAppSettings.mockResolvedValue({ hideWelcomeMessage: true });
 
     render(<App />);
 
-    await waitFor(() => expect(screen.queryByText("Welcome")).toBeNull());
+    await waitFor(() => expect(driverMocks.driver).not.toHaveBeenCalled());
+  });
+
+  it("creates a blank draft on startup without auto-selecting the first setlist", async () => {
+    apiMocks.loadAppSettings.mockResolvedValue({ hideWelcomeMessage: true, setlistDirectory: "/setlists" });
+    apiMocks.listSetlists.mockResolvedValue([createLibraryEntry("Example", "/setlists/Example.hls")]);
+
+    render(<App />);
+
+    const nameInput = (await screen.findByLabelText("Name")) as HTMLInputElement;
+    expect(nameInput.value).toBe("");
+    expect(await screen.findByText("Example")).toBeTruthy();
+    expect(apiMocks.loadSetlist).not.toHaveBeenCalled();
+    expect(document.querySelector(".list-row.active")).toBeNull();
+  });
+
+  it("defers the update prompt until the guided intro is completed", async () => {
+    apiMocks.loadAppSettings.mockResolvedValue({});
+    updaterMocks.checkForAppUpdate.mockResolvedValue({
+      currentVersion: "0.1.0",
+      version: "0.1.1",
+      body: "Bug fixes",
+    });
+
+    render(<App />);
+
+    await waitFor(() => expect(driverMocks.driver).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText("Update available")).toBeNull();
+
+    const config = driverMocks.state.config as { onDestroyed?: () => void };
+    config.onDestroyed?.();
+
+    expect(await screen.findByText("Update available")).toBeTruthy();
+  });
+
+  it("resets app state from the help menu event back to the blank startup state", async () => {
+    apiMocks.loadAppSettings.mockResolvedValue({
+      hideWelcomeMessage: true,
+      setlistDirectory: "/setlists",
+      presetDirectory: "/presets",
+      includeSetlistSubdirectories: true,
+      includePresetSubdirectories: true,
+    });
+    apiMocks.listSetlists.mockResolvedValue([createLibraryEntry("Example", "/setlists/Example.hls")]);
+    apiMocks.listPresets.mockResolvedValue([createLibraryEntry("Alive", "/presets/Alive.hlx")]);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    render(<App />);
+
+    expect(await screen.findByText("Example")).toBeTruthy();
+    expect(await screen.findByText("Alive")).toBeTruthy();
+
+    eventMocks.emit("app://reset-app-state");
+
+    await waitFor(() => expect(apiMocks.resetAppSettings).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByText("No setlist directory selected")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("No preset directory selected")).toBeTruthy());
+
+    const nameInput = (await screen.findByLabelText("Name")) as HTMLInputElement;
+    expect(nameInput.value).toBe("");
+    expect(screen.queryByText("Example")).toBeNull();
+    expect(screen.queryByText("Alive")).toBeNull();
+    await waitFor(() => expect(driverMocks.driver).toHaveBeenCalledTimes(1));
   });
 
   it("inserts a preset from the library when dropped on a gap", async () => {
@@ -248,6 +402,8 @@ describe("App desktop flows", () => {
 
     render(<App />);
 
+    fireEvent.click(await screen.findByRole("button", { name: "Example" }));
+    await screen.findByDisplayValue("Example");
     const presetRow = await screen.findByText("Dragged Preset");
     const gap = await screen.findByTestId("insert-gap-1");
     mockElementFromPoint(gap);
@@ -274,6 +430,8 @@ describe("App desktop flows", () => {
 
     render(<App />);
 
+    fireEvent.click(await screen.findByRole("button", { name: "Example" }));
+    await screen.findByDisplayValue("Example");
     const presetRow = await screen.findByText("Replacement");
     const elementFromPoint = mockElementFromPoint(null);
     const emptyRow = screen.getByTestId("slot-row-1");
@@ -316,6 +474,8 @@ describe("App desktop flows", () => {
 
     render(<App />);
 
+    fireEvent.click(await screen.findByRole("button", { name: "Example" }));
+    await screen.findByDisplayValue("Example");
     const row = await screen.findByTestId("slot-row-0");
     const gap = screen.getByTestId("insert-gap-3");
     mockElementFromPoint(gap);
@@ -363,6 +523,8 @@ describe("App desktop flows", () => {
 
     render(<App />);
 
+    fireEvent.click(await screen.findByRole("button", { name: "Example" }));
+    await screen.findByDisplayValue("Example");
     const nameInput = (await screen.findByLabelText("Name")) as HTMLInputElement;
     fireEvent.change(nameInput, { target: { value: "" } });
 
@@ -395,6 +557,7 @@ describe("App desktop flows", () => {
 
     render(<App />);
 
+    fireEvent.click(await screen.findByRole("button", { name: "Example" }));
     await screen.findByDisplayValue("Example");
     fireEvent.click(screen.getByRole("button", { name: "Sort setlist alphabetically" }));
     fireEvent.click(await screen.findByRole("button", { name: "OK" }));
@@ -473,6 +636,7 @@ describe("App desktop flows", () => {
 
     render(<App />);
 
+    fireEvent.click(await screen.findByRole("button", { name: "Example" }));
     await screen.findByDisplayValue("Example");
     fireEvent.click(screen.getByRole("button", { name: "Sort setlist alphabetically" }));
     expect(await screen.findByText("Sort setlist")).toBeTruthy();
@@ -492,6 +656,7 @@ describe("App desktop flows", () => {
 
     render(<App />);
 
+    fireEvent.click(await screen.findByRole("button", { name: "Example" }));
     await screen.findByDisplayValue("Example");
     fireEvent.click(screen.getByRole("button", { name: "Sort setlist alphabetically" }));
     expect(await screen.findByText("Sort setlist")).toBeTruthy();

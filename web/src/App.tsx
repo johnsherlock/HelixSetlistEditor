@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
+import { driver, type Driver as DriverJs } from "driver.js";
 
 import {
   getPresetNames,
@@ -19,6 +21,7 @@ import {
   loadSetlist,
   pickPresetDirectory,
   pickSetlistDirectory,
+  resetAppSettings,
   saveAppSettings,
   saveSetlist,
   saveSetlistAs,
@@ -56,6 +59,8 @@ type RecentDropHighlight = {
   index: number;
   nonce: number;
 } | null;
+
+const INTRO_GUIDE_STEP_COUNT = 6;
 
 function createSlotLabels(): string[] {
   const labels = ["A", "B", "C", "D"];
@@ -233,9 +238,10 @@ export function App() {
   const [saving, setSaving] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [hideWelcomeMessage, setHideWelcomeMessage] = useState(false);
-  const [welcomeOptOut, setWelcomeOptOut] = useState(false);
+  const [guideActive, setGuideActive] = useState(false);
+  const [guidePending, setGuidePending] = useState(false);
+  const [guideOptOut, setGuideOptOut] = useState(false);
   const [nameValidationError, setNameValidationError] = useState(false);
   const [setlistNameInput, setSetlistNameInput] = useState("");
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
@@ -251,6 +257,8 @@ export function App() {
   const [dragPointer, setDragPointer] = useState<DragPointerState>(null);
   const [recentDropHighlight, setRecentDropHighlight] = useState<RecentDropHighlight>(null);
   const setlistNameInputRef = useRef<HTMLInputElement>(null);
+  const introGuideRef = useRef<DriverJs | null>(null);
+  const guideOptOutRef = useRef(false);
 
   const filteredPresets = useMemo(() => {
     const query = presetFilter.trim().toLowerCase();
@@ -292,8 +300,9 @@ export function App() {
         setIncludeSetlistSubdirectories(settings.includeSetlistSubdirectories ?? false);
         setIncludePresetSubdirectories(settings.includePresetSubdirectories ?? false);
         setHideWelcomeMessage(settings.hideWelcomeMessage ?? false);
-        setWelcomeOptOut(settings.hideWelcomeMessage ?? false);
-        setShowWelcomeModal(!settings.hideWelcomeMessage);
+        setGuideOptOut(settings.hideWelcomeMessage ?? false);
+        guideOptOutRef.current = settings.hideWelcomeMessage ?? false;
+        setGuidePending(!settings.hideWelcomeMessage);
       } finally {
         if (!cancelled) {
           setSettingsLoaded(true);
@@ -349,8 +358,8 @@ export function App() {
       return;
     }
 
-    void refreshSetlists(!activePath && !draft, setlistDirectory, includeSetlistSubdirectories);
-  }, [activePath, draft, includeSetlistSubdirectories, setlistDirectory, settingsLoaded]);
+    void refreshSetlists(setlistDirectory, includeSetlistSubdirectories);
+  }, [includeSetlistSubdirectories, setlistDirectory, settingsLoaded]);
 
   useEffect(() => {
     if (!settingsLoaded) {
@@ -360,11 +369,205 @@ export function App() {
     void refreshPresets(presetDirectory, includePresetSubdirectories);
   }, [includePresetSubdirectories, presetDirectory, settingsLoaded]);
 
-  async function refreshSetlists(
-    autoSelectFirst: boolean,
-    directory: string | null,
-    includeSubdirectories: boolean,
-  ): Promise<void> {
+  useEffect(() => {
+    if (!settingsLoaded || draft || activePath) {
+      return;
+    }
+
+    void createNewDraftFromTemplate(false);
+  }, [activePath, draft, settingsLoaded]);
+
+  useEffect(() => {
+    guideOptOutRef.current = guideOptOut;
+  }, [guideOptOut]);
+
+  useEffect(() => {
+    if (
+      !settingsLoaded ||
+      !draft ||
+      loading ||
+      !guidePending ||
+      introGuideRef.current
+    ) {
+      return;
+    }
+
+    const guide = driver({
+      allowClose: false,
+      allowKeyboardControl: false,
+      disableActiveInteraction: true,
+      popoverClass: "helix-guide-popover",
+      showButtons: ["previous", "next"],
+      prevBtnText: "Previous",
+      nextBtnText: "Next",
+      doneBtnText: "Done",
+      steps: [
+        {
+          popover: {
+            title: "Welcome",
+            description:
+              "Welcome to Helix Setlist Editor - your offline editor for creating and managing Helix Setlists! Before we begin, let's have a quick look around...",
+            side: "over",
+            align: "center",
+          },
+        },
+        {
+          element: "[data-tour='setlists-panel']",
+          popover: {
+            title: "Setlists",
+            description:
+              "Click here to select the directory where your setlists are stored on your local hard drive. Your setlists will be loaded and can be clicked on to view, edit or delete. Include subdirectories if your setlist are stored in a nested directory structure.",
+          },
+        },
+        {
+          element: "[data-tour='presets-panel']",
+          popover: {
+            title: "Presets",
+            description:
+              "Click here to select the directory where your presets are stored on your local hard drive. Include subdirectories if your presets are stored in a nested directory structure. Filter your presets using the search.",
+          },
+        },
+        {
+          element: "[data-tour='setlist-editor']",
+          popover: {
+            title: "Editor",
+            description:
+              "Setlists are displayed here. Drag presets from your preset list into the position you want and rearrange the setlist as you need. Don't forget to give your setlist a good name!",
+          },
+        },
+        {
+          element: "[data-tour='action-row']",
+          popover: {
+            title: "Actions",
+            description:
+              "Click here to create a new setlist, save changes to an existing setlist, save your changes as a new setlist or reset changes you've made tor you setlist",
+          },
+        },
+        {
+          popover: {
+            title: "Ready to start",
+            description: "That's it - happy editing!",
+            side: "over",
+            align: "center",
+          },
+        },
+      ],
+      onPopoverRender: (popover, opts) => {
+        const existingOptOut = popover.wrapper.querySelector(".guide-optout");
+        if (existingOptOut) {
+          existingOptOut.remove();
+        }
+
+        if (opts.state.activeIndex !== INTRO_GUIDE_STEP_COUNT - 1) {
+          return;
+        }
+
+        const label = document.createElement("label");
+        label.className = "subdir-toggle modal-checkbox guide-optout";
+
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = guideOptOutRef.current;
+        checkbox.addEventListener("change", () => {
+          guideOptOutRef.current = checkbox.checked;
+          setGuideOptOut(checkbox.checked);
+        });
+
+        const text = document.createElement("span");
+        text.textContent = "Do not show this guide again";
+
+        label.appendChild(checkbox);
+        label.appendChild(text);
+        popover.description.insertAdjacentElement("afterend", label);
+      },
+      onDestroyed: () => {
+        introGuideRef.current = null;
+        setGuidePending(false);
+        setGuideActive(false);
+        if (guideOptOutRef.current) {
+          setHideWelcomeMessage(true);
+        }
+      },
+    });
+
+    introGuideRef.current = guide;
+    setGuideActive(true);
+
+    const startTimer = window.setTimeout(() => {
+      guide.drive();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(startTimer);
+      if (introGuideRef.current === guide) {
+        guide.destroy();
+        introGuideRef.current = null;
+      }
+    };
+  }, [draft, guidePending, loading, settingsLoaded]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function handleShowGuideAgain(): Promise<void> {
+      guideOptOutRef.current = false;
+      if (!mounted) {
+        return;
+      }
+      setGuideOptOut(false);
+      setGuidePending(true);
+    }
+
+    async function handleResetAppState(): Promise<void> {
+      const confirmed = window.confirm(
+        "Reset app state? This will clear selected directories, reopen a blank setlist, and show the intro guide again.",
+      );
+
+      if (!confirmed || !mounted) {
+        return;
+      }
+
+      setErrorMessage(null);
+      setPresetFilter("");
+      setPendingAction(null);
+      setShowUnsavedModal(false);
+      setPendingReplace(null);
+      setPendingDeleteSetlist(null);
+      setShowSortConfirm(false);
+      setSetlists([]);
+      setPresets([]);
+      setSetlistDirectory(null);
+      setPresetDirectory(null);
+      setIncludeSetlistSubdirectories(false);
+      setIncludePresetSubdirectories(false);
+      setActivePath(null);
+      setDirty(false);
+      setHideWelcomeMessage(false);
+      setGuideOptOut(false);
+      guideOptOutRef.current = false;
+      setGuidePending(true);
+      await resetAppSettings();
+      await createNewDraftFromTemplate(false);
+    }
+
+    const unlistenPromises = [
+      listen("app://show-intro-guide", () => {
+        void handleShowGuideAgain();
+      }),
+      listen("app://reset-app-state", () => {
+        void handleResetAppState();
+      }),
+    ];
+
+    return () => {
+      mounted = false;
+      for (const unlistenPromise of unlistenPromises) {
+        void unlistenPromise.then((unlisten) => unlisten());
+      }
+    };
+  }, []);
+
+  async function refreshSetlists(directory: string | null, includeSubdirectories: boolean): Promise<void> {
     if (!directory) {
       setSetlists([]);
       return;
@@ -377,10 +580,6 @@ export function App() {
       const nextSetlists = await listSetlists(directory, includeSubdirectories);
 
       setSetlists(nextSetlists);
-
-      if (autoSelectFirst && nextSetlists[0]) {
-        await loadIntoEditor(nextSetlists[0].absolutePath);
-      }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Failed to load setlists.");
     } finally {
@@ -424,7 +623,7 @@ export function App() {
     }
   }
 
-  async function createNewDraftFromTemplate(): Promise<void> {
+  async function createNewDraftFromTemplate(markDirty = false): Promise<void> {
     setLoading(true);
     setErrorMessage(null);
 
@@ -436,7 +635,7 @@ export function App() {
       setDraft(nextDraft);
       setSetlistNameInput("");
       setActivePath(null);
-      setDirty(true);
+      setDirty(markDirty);
       setPendingAction(null);
       setNameValidationError(false);
     } catch (error) {
@@ -892,7 +1091,7 @@ export function App() {
       return;
     }
 
-    await createNewDraftFromTemplate();
+    await createNewDraftFromTemplate(true);
   }
 
   function handleDiscardAndContinue(): void {
@@ -909,7 +1108,7 @@ export function App() {
       return;
     }
 
-    void createNewDraftFromTemplate();
+    void createNewDraftFromTemplate(true);
   }
 
   function handleNew(): void {
@@ -934,7 +1133,7 @@ export function App() {
       return;
     }
 
-    await createNewDraftFromTemplate();
+    await createNewDraftFromTemplate(false);
   }
 
   function handleRequestDeleteSetlist(entry: LibraryEntry): void {
@@ -1032,7 +1231,7 @@ export function App() {
       if (nextDirectory && nextDirectory !== setlistDirectory) {
         setSetlistDirectory(nextDirectory);
       } else if (setlistDirectory) {
-        await refreshSetlists(false, setlistDirectory, includeSetlistSubdirectories);
+        await refreshSetlists(setlistDirectory, includeSetlistSubdirectories);
       }
 
       if (reason === "switch") {
@@ -1055,14 +1254,6 @@ export function App() {
 
     setAvailableUpdate(null);
     setUpdateStatusMessage(null);
-  }
-
-  function handleDismissWelcome(): void {
-    setShowWelcomeModal(false);
-
-    if (welcomeOptOut) {
-      setHideWelcomeMessage(true);
-    }
   }
 
   async function handleInstallUpdate(): Promise<void> {
@@ -1098,7 +1289,7 @@ export function App() {
   return (
     <div className="shell">
       <aside className="sidebar">
-        <section className="panel list-panel setlists-panel">
+        <section className="panel list-panel setlists-panel" data-tour="setlists-panel">
           <div className="panel-header">
             <div className="panel-header-main">
               <h2>Setlists</h2>
@@ -1164,7 +1355,7 @@ export function App() {
           </div>
         </section>
 
-        <section className="panel list-panel">
+        <section className="panel list-panel" data-tour="presets-panel">
           <div className="panel-header">
             <div className="panel-header-main">
               <h2>Presets</h2>
@@ -1240,7 +1431,7 @@ export function App() {
           <div className="hero-copy">
             <h1>Helix Setlist Editor</h1>
           </div>
-          <div className="action-row">
+          <div className="action-row" data-tour="action-row">
             <button className="ghost-button" onClick={handleNew} disabled={saving}>
               New
             </button>
@@ -1258,7 +1449,7 @@ export function App() {
 
         {errorMessage ? <div className="error-banner">{errorMessage}</div> : null}
 
-        <section className="editor-panel">
+        <section className="editor-panel" data-tour="setlist-editor">
           <div className="title-row">
             <label className="field-label title-label" htmlFor="setlist-name-input">
               Name
@@ -1353,30 +1544,7 @@ export function App() {
         </div>
       ) : null}
 
-      {showWelcomeModal ? (
-        <div className="modal-backdrop">
-          <div className="modal-card">
-            <h3>Welcome</h3>
-            <p>Choose a setlist directory if you want to browse existing `.hls` setlists, and choose a preset directory to browse your `.hlx` files.</p>
-            <p>Create a new setlist or open an existing one, drag presets into the setlist or reorder them, then save when you are finished.</p>
-            <label className="subdir-toggle modal-checkbox">
-              <input
-                type="checkbox"
-                checked={welcomeOptOut}
-                onChange={(event) => setWelcomeOptOut(event.target.checked)}
-              />
-              <span>Do not show this again</span>
-            </label>
-            <div className="modal-actions">
-              <button className="solid-button" onClick={handleDismissWelcome}>
-                Got it
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {availableUpdate && !showWelcomeModal ? (
+      {availableUpdate && !guideActive ? (
         <div className="modal-backdrop">
           <div className="modal-card">
             <h3>Update available</h3>

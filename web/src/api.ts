@@ -207,3 +207,7 @@ export async function loadAppSettings(): Promise<AppSettings> {
 export async function saveAppSettings(settings: AppSettings): Promise<void> {
   localStorage.setItem(APP_SETTINGS_KEY, JSON.stringify(settings));
 }
+
+export async function resetAppSettings(): Promise<void> {
+  localStorage.removeItem(APP_SETTINGS_KEY);
+}

@@ -1,5 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import "driver.js/dist/driver.css";
 
 import { App } from "./App";
 import "./styles.css";
