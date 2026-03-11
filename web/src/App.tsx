@@ -28,7 +28,7 @@ import {
   saveSetlistAs,
 } from "./api";
 import type { AppSettings, LibraryEntry, RuntimeInfo, SetlistDraft } from "./types";
-import { checkForAppUpdate, installAppUpdate, type AvailableAppUpdate } from "./updater";
+import { checkForAppUpdate, getCurrentAppVersion, installAppUpdate, type AvailableAppUpdate } from "./updater";
 
 type PendingAction =
   | { kind: "switch-setlist"; absolutePath: string }
@@ -254,6 +254,7 @@ export function App() {
   const [availableUpdate, setAvailableUpdate] = useState<AvailableAppUpdate | null>(null);
   const [installingUpdate, setInstallingUpdate] = useState(false);
   const [updateStatusMessage, setUpdateStatusMessage] = useState<string | null>(null);
+  const [updateCheckResult, setUpdateCheckResult] = useState<string | null>(null);
   const [dragSource, setDragSource] = useState<DragSource>(null);
   const [activeDropTarget, setActiveDropTarget] = useState<DropTarget>(null);
   const [dragPointer, setDragPointer] = useState<DragPointerState>(null);
@@ -554,7 +555,26 @@ export function App() {
       await createNewDraftFromTemplate(false);
     }
 
+    async function handleCheckForUpdates(): Promise<void> {
+      setErrorMessage(null);
+      setUpdateStatusMessage(null);
+      setUpdateCheckResult(null);
+
+      const [nextUpdate, currentVersion] = await Promise.all([checkForAppUpdate(), getCurrentAppVersion()]);
+
+      if (nextUpdate) {
+        setAvailableUpdate(nextUpdate);
+        return;
+      }
+
+      setAvailableUpdate(null);
+      setUpdateCheckResult(`You're up to date. You are running ${currentVersion}.`);
+    }
+
     const unlistenPromises = [
+      listen("app://check-for-updates", () => {
+        void handleCheckForUpdates();
+      }),
       listen("app://show-intro-guide", () => {
         void handleShowGuideAgain();
       }),
@@ -1262,6 +1282,7 @@ export function App() {
 
     setAvailableUpdate(null);
     setUpdateStatusMessage(null);
+    setUpdateCheckResult(null);
   }
 
   async function handleInstallUpdate(): Promise<void> {
@@ -1554,19 +1575,27 @@ export function App() {
         </div>
       ) : null}
 
-      {availableUpdate && !guideActive ? (
+      {(availableUpdate || updateCheckResult) && !guideActive ? (
         <div className="modal-backdrop">
           <div className="modal-card">
-            <h3>Update available</h3>
-            <p>{`Version ${availableUpdate.version} is available. You are running ${availableUpdate.currentVersion}.`}</p>
-            {availableUpdate.body ? <p className="modal-note">{availableUpdate.body}</p> : null}
-            {updateStatusMessage ? <p className="modal-note">{updateStatusMessage}</p> : null}
+            <h3>{availableUpdate ? "Update available" : "Check for updates"}</h3>
+            {availableUpdate ? (
+              <>
+                <p>{`Version ${availableUpdate.version} is available. You are running ${availableUpdate.currentVersion}.`}</p>
+                {availableUpdate.body ? <p className="modal-note">{availableUpdate.body}</p> : null}
+                {updateStatusMessage ? <p className="modal-note">{updateStatusMessage}</p> : null}
+              </>
+            ) : (
+              <p>{updateCheckResult}</p>
+            )}
             <div className="modal-actions">
-              <button className="solid-button" onClick={() => void handleInstallUpdate()} disabled={installingUpdate}>
-                {installingUpdate ? "Installing..." : "Install update"}
-              </button>
+              {availableUpdate ? (
+                <button className="solid-button" onClick={() => void handleInstallUpdate()} disabled={installingUpdate}>
+                  {installingUpdate ? "Installing..." : "Install update"}
+                </button>
+              ) : null}
               <button className="ghost-button" onClick={handleDismissUpdate} disabled={installingUpdate}>
-                Later
+                {availableUpdate ? "Later" : "OK"}
               </button>
             </div>
           </div>

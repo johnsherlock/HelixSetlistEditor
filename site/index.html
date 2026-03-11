@@ -28,8 +28,8 @@
             <a class="button button-secondary" data-download="windows" href="https://github.com/johnsherlock/HelixSetlistEditor/releases/download/v0.1.4/Helix.Setlist.Editor_0.1.4_x64_en-US.msi">Download for Windows</a>
           </div>
           <p class="install-note">
-            Note: Mac builds are currently unsigned beta releases. If Gatekeeper blocks the app or alerts that it is 'damaged' you will need to run the following script to remove it from quarantine.
-            <pre>sudo xattr -rd com.apple.quarantine /Applications/Helix\ Setlist\ Editor.app</pre>
+            <b>Note:</b> Mac builds are currently unsigned beta releases. If Gatekeeper blocks the app or alerts that it is 'damaged' you will need to run the following command to remove it from quarantine.
+            <pre class="command-line">sudo xattr -rd com.apple.quarantine /Applications/Helix\ Setlist\ Editor.app</pre>
           </p>
         </div>
       </header>
@@ -38,19 +38,19 @@
         <section class="feature-strip" aria-label="Core capabilities">
           <article>
             <h2>Organise presets fast</h2>
-            <p>Drag presets into place, reorder slots, replace sounds, and alphabetise full setlists when needed.</p>
+            <p>Drag presets into place and reorder the setlet quickly and easily. Filter and search through your presets with ease.</p>
           </article>
           <article>
-            <h2>Work from your folders</h2>
-            <p>Select separate preset and setlist directories, include subdirectories, and keep your existing file structure intact.</p>
+            <h2>Nested Directory Support</h2>
+            <p>Supports nested directory structures for both presets and setlists allowing you to keep your presets orgainsed on disk and easy to find in the editor.</p>
           </article>
           <article>
             <h2>Export Helix-ready files</h2>
-            <p>The app rebuilds valid `.hls` containers with the correct zlib wrapper, CRC32, and decompressed byte size.</p>
+            <p>The app exports valid `.hls` setlists files which can be easily imported into your Helix device via HX Edit.</p>
           </article>
         </section>
 
-        <section class="details-grid">
+        <!-- <section class="details-grid">
           <article class="panel panel-dark">
             <p class="panel-label">What it does</p>
             <ul>
@@ -71,7 +71,7 @@
               <li>Source, release notes, and issue tracking stay on GitHub</li>
             </ul>
           </article>
-        </section>
+        </section> -->
       </main>
 
       <footer class="site-footer">

@@ -23,6 +23,7 @@ const apiMocks = vi.hoisted(() => ({
 
 const updaterMocks = vi.hoisted(() => ({
   checkForAppUpdate: vi.fn(),
+  getCurrentAppVersion: vi.fn(),
   installAppUpdate: vi.fn(),
 }));
 
@@ -210,6 +211,7 @@ describe("App desktop flows", () => {
       size: 100,
     });
     updaterMocks.checkForAppUpdate.mockResolvedValue(null);
+    updaterMocks.getCurrentAppVersion.mockResolvedValue("0.1.4");
     updaterMocks.installAppUpdate.mockResolvedValue(undefined);
     driverMocks.state.config = undefined;
     eventMocks.handlers.clear();
@@ -283,6 +285,18 @@ describe("App desktop flows", () => {
     fireEvent.click(screen.getByRole("button", { name: "Install update" }));
 
     await waitFor(() => expect(updaterMocks.installAppUpdate).toHaveBeenCalled());
+  });
+
+  it("checks for updates from the app menu and reports when no update is available", async () => {
+    render(<App />);
+
+    eventMocks.emit("app://check-for-updates");
+
+    expect(await screen.findByText("Check for updates")).toBeTruthy();
+    expect(screen.getByText("You're up to date. You are running 0.1.4.")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "OK" }));
+    await waitFor(() => expect(screen.queryByText("Check for updates")).toBeNull());
   });
 
   it("starts the guided intro by default and persists the opt-out on completion", async () => {

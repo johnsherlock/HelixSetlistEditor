@@ -11,6 +11,7 @@ use walkdir::WalkDir;
 
 const MENU_SHOW_INTRO_GUIDE: &str = "show_intro_guide";
 const MENU_RESET_APP_STATE: &str = "reset_app_state";
+const MENU_CHECK_FOR_UPDATES: &str = "check_for_updates";
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -52,6 +53,13 @@ fn build_app_menu(app: &tauri::AppHandle) -> Result<Menu<tauri::Wry>, tauri::Err
         app,
         MENU_SHOW_INTRO_GUIDE,
         "Show Intro Guide Again",
+        true,
+        None::<&str>,
+    )?;
+    let check_for_updates = MenuItem::with_id(
+        app,
+        MENU_CHECK_FOR_UPDATES,
+        "Check for Updates",
         true,
         None::<&str>,
     )?;
@@ -112,6 +120,8 @@ fn build_app_menu(app: &tauri::AppHandle) -> Result<Menu<tauri::Wry>, tauri::Err
                     "Help",
                     true,
                     &[
+                        &check_for_updates,
+                        &PredefinedMenuItem::separator(app)?,
                         &show_intro_guide,
                         &reset_app_state,
                         &PredefinedMenuItem::separator(app)?,
@@ -144,6 +154,8 @@ fn build_app_menu(app: &tauri::AppHandle) -> Result<Menu<tauri::Wry>, tauri::Err
                     "Help",
                     true,
                     &[
+                        &check_for_updates,
+                        &PredefinedMenuItem::separator(app)?,
                         &show_intro_guide,
                         &reset_app_state,
                         &PredefinedMenuItem::separator(app)?,
@@ -317,6 +329,9 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
         .on_menu_event(|app, event| match event.id().0.as_str() {
+            MENU_CHECK_FOR_UPDATES => {
+                let _ = app.emit("app://check-for-updates", ());
+            }
             MENU_SHOW_INTRO_GUIDE => {
                 let _ = app.emit("app://show-intro-guide", ());
             }
