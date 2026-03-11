@@ -1,6 +1,6 @@
 [package]
 name = "helix-setlist-editor"
-version = "0.1.5"
+version = "0.1.6"
 description = "Desktop editor for Line 6 Helix .hls setlists"
 authors = ["John"]
 edition = "2021"
