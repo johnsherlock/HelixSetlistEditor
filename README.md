@@ -36,13 +36,21 @@ Updater artifacts are published alongside each GitHub Release:
 - `.app.tar.gz` and `.sig` for the Tauri updater
 - `latest.json` for update discovery
 
+## Website
+
+A public download site lives in:
+
+- [site](/Users/john/.codex/worktrees/c784/HelixSetlistEditor/site)
+
+It is deployed to GitHub Pages from the `main` branch. The site reads [site/downloads.json](/Users/john/.codex/worktrees/c784/HelixSetlistEditor/site/downloads.json), which is updated automatically by the tag-based release workflow after each published release.
+
 ## Release Workflow
 
 The CI workflow is in:
 
 - [.github/workflows/ci.yml](/Users/john/Documents/Projects/HelixSetlistEditor/.github/workflows/ci.yml)
 
-It runs on pushes to `main` and pull requests and verifies:
+It runs on pushes to `main` and pull requests for desktop-app changes and verifies:
 
 - version sync
 - type-checking
@@ -50,11 +58,17 @@ It runs on pushes to `main` and pull requests and verifies:
 - frontend build
 - native Rust/Tauri tests
 
+A separate GitHub Pages workflow is in:
+
+- [.github/workflows/site.yml](/Users/john/.codex/worktrees/c784/HelixSetlistEditor/.github/workflows/site.yml)
+
+It deploys the static `site/` app when website files change on `main`.
+
 The release workflow is in:
 
 - [.github/workflows/release.yml](/Users/john/Documents/Projects/HelixSetlistEditor/.github/workflows/release.yml)
 
-It runs only on tag pushes, builds the macOS and Windows releases, generates updater metadata for macOS, and publishes release assets to GitHub Releases.
+It runs only on tag pushes, builds the macOS and Windows releases, generates updater metadata for macOS, publishes release assets to GitHub Releases, and updates the website download manifest for GitHub Pages.
 
 Required GitHub secrets:
 
@@ -81,6 +95,7 @@ Release checklist:
 - [src-tauri](/Users/john/Documents/Projects/HelixSetlistEditor/src-tauri): native desktop shell, filesystem bridge, bundling
 - [web/src](/Users/john/Documents/Projects/HelixSetlistEditor/web/src): React desktop UI
 - [tests](/Users/john/Documents/Projects/HelixSetlistEditor/tests): unit and UI tests
+- [site](/Users/john/.codex/worktrees/c784/HelixSetlistEditor/site): static marketing and download site
 
 ## Development
 

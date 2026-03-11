@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Helix Setlist Editor</title>
+    <meta
+      name="description"
+      content="Offline desktop editor for creating, organizing, and exporting Line 6 Helix setlists outside HX Edit."
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="site-shell">
+      <header class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Desktop Editor for Line 6 Helix</p>
+          <h1>Build and manage Helix setlists without HX Edit.</h1>
+          <p class="hero-text">
+            Helix Setlist Editor is a focused desktop app for assembling `.hls` setlists,
+            organising `.hlx` presets, and exporting files your Helix can import.
+          </p>
+          <div class="cta-group">
+            <a class="button button-primary" data-download="mac" href="https://github.com/johnsherlock/HelixSetlistEditor/releases">Download for macOS</a>
+            <a class="button button-secondary" data-download="windows" href="https://github.com/johnsherlock/HelixSetlistEditor/releases">Download for Windows</a>
+          </div>
+          <div class="release-meta" aria-live="polite">
+            <span data-version-label>Checking latest release…</span>
+            <a data-release-link href="https://github.com/johnsherlock/HelixSetlistEditor/releases">View release notes</a>
+          </div>
+          <p class="install-note">
+            macOS builds are currently unsigned beta releases. If Gatekeeper blocks the app,
+            use Finder to open it manually or remove the quarantine attribute.
+          </p>
+        </div>
+        <div class="hero-visual" aria-hidden="true">
+          <div class="visual-frame">
+            <img src="./assets/app-preview.svg" alt="" />
+          </div>
+        </div>
+      </header>
+
+      <main>
+        <section class="feature-strip" aria-label="Core capabilities">
+          <article>
+            <h2>Organise presets fast</h2>
+            <p>Drag presets into place, reorder slots, replace sounds, and alphabetise full setlists when needed.</p>
+          </article>
+          <article>
+            <h2>Work from your folders</h2>
+            <p>Select separate preset and setlist directories, include subdirectories, and keep your existing file structure intact.</p>
+          </article>
+          <article>
+            <h2>Export Helix-ready files</h2>
+            <p>The app rebuilds valid `.hls` containers with the correct zlib wrapper, CRC32, and decompressed byte size.</p>
+          </article>
+        </section>
+
+        <section class="details-grid">
+          <article class="panel panel-dark">
+            <p class="panel-label">What it does</p>
+            <ul>
+              <li>Open existing `.hls` setlists</li>
+              <li>Create new setlists from a bundled blank template</li>
+              <li>Browse `.hlx` presets from local directories</li>
+              <li>Insert, replace, reorder, remove, and sort presets</li>
+              <li>Save over the original file or export a new copy</li>
+            </ul>
+          </article>
+          <article class="panel panel-accent">
+            <p class="panel-label">Current beta notes</p>
+            <ul>
+              <li>Available for macOS and Windows</li>
+              <li>Windows ships as an `.msi` installer</li>
+              <li>macOS ships as a `.dmg` download</li>
+              <li>Desktop app checks for updates on launch</li>
+              <li>Source, release notes, and issue tracking stay on GitHub</li>
+            </ul>
+          </article>
+        </section>
+      </main>
+
+      <footer class="site-footer">
+        <p>Helix Setlist Editor by John Sherlock.</p>
+        <div class="footer-links">
+          <a href="https://github.com/johnsherlock/HelixSetlistEditor/releases">GitHub Releases</a>
+          <a href="https://ko-fi.com/johnsherlock">Support on Ko-fi</a>
+        </div>
+      </footer>
+    </div>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
