@@ -78,7 +78,6 @@ jobs:
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          prerelease: true
           files: |
             ${{ steps.assets.outputs.dmg_path }}
             ${{ steps.assets.outputs.app_tar_path }}
@@ -134,7 +133,6 @@ jobs:
       - name: Publish Windows MSI asset
         uses: softprops/action-gh-release@v2
         with:
-          prerelease: true
           files: ${{ steps.windows_assets.outputs.msi_path }}
 
 

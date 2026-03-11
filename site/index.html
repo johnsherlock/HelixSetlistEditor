@@ -14,29 +14,23 @@
     <div class="site-shell">
       <header class="hero">
         <div class="hero-copy">
-          <p class="eyebrow">Desktop Editor for Line 6 Helix</p>
-          <h1>Build and manage Helix setlists without HX Edit.</h1>
+          <p class="eyebrow">Desktop Editor for Line 6 Helix Setlists</p>
+          <h1>Build and manage Helix setlists without HX Edit</h1>
           <p class="hero-text">
-            Helix Setlist Editor is a focused desktop app for assembling `.hls` setlists,
-            organising `.hlx` presets, and exporting files your Helix can import.
+            Helix Setlist Editor is a free desktop app for assembling `.hls` setlists files,
+            allowing you to quickly and easily create clean and organised setlists for import into your Helix device.
           </p>
-          <div class="cta-group">
-            <a class="button button-primary" data-download="mac" href="https://github.com/johnsherlock/HelixSetlistEditor/releases">Download for macOS</a>
-            <a class="button button-secondary" data-download="windows" href="https://github.com/johnsherlock/HelixSetlistEditor/releases">Download for Windows</a>
+          <div class="visual-frame">
+            <img src="./assets/HelixSelistEditorScreenshot.png" alt="Helix Setlist Editor Screenshot" />
           </div>
-          <div class="release-meta" aria-live="polite">
-            <span data-version-label>Checking latest release…</span>
-            <a data-release-link href="https://github.com/johnsherlock/HelixSetlistEditor/releases">View release notes</a>
+          <div class="cta-group">
+            <a class="button button-primary" data-download="mac" href="https://github.com/johnsherlock/HelixSetlistEditor/releases/download/v0.1.4/Helix.Setlist.Editor_0.1.4_aarch64.dmg">Download for Mac</a>
+            <a class="button button-secondary" data-download="windows" href="https://github.com/johnsherlock/HelixSetlistEditor/releases/download/v0.1.4/Helix.Setlist.Editor_0.1.4_x64_en-US.msi">Download for Windows</a>
           </div>
           <p class="install-note">
-            macOS builds are currently unsigned beta releases. If Gatekeeper blocks the app,
-            use Finder to open it manually or remove the quarantine attribute.
+            Note: Mac builds are currently unsigned beta releases. If Gatekeeper blocks the app or alerts that it is 'damaged' you will need to run the following script to remove it from quarantine.
+            <pre>sudo xattr -rd com.apple.quarantine /Applications/Helix\ Setlist\ Editor.app</pre>
           </p>
-        </div>
-        <div class="hero-visual" aria-hidden="true">
-          <div class="visual-frame">
-            <img src="./assets/app-preview.svg" alt="" />
-          </div>
         </div>
       </header>
 
