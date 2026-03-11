@@ -19,8 +19,12 @@ function setDisabled(button, label) {
 
 function applyRelease(data) {
   const version = data.version ?? "Latest release";
-  versionLabel.textContent = `Current version: ${version}`;
-  releaseLink.href = data.releaseUrl ?? fallbackReleaseUrl;
+  if (versionLabel) {
+    versionLabel.textContent = `Current version: ${version}`;
+  }
+  if (releaseLink) {
+    releaseLink.href = data.releaseUrl ?? fallbackReleaseUrl;
+  }
 
   if (data.mac?.url) {
     downloadButtons.mac.href = data.mac.url;
@@ -72,7 +76,7 @@ async function fetchManifest() {
 }
 
 async function fetchLatestFromGitHub() {
-  const response = await fetch(`https://api.github.com/repos/${repo}/releases?per_page=8`, {
+  const response = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
     headers: {
       Accept: "application/vnd.github+json",
     },
@@ -82,8 +86,7 @@ async function fetchLatestFromGitHub() {
     throw new Error(`GitHub releases request failed: ${response.status}`);
   }
 
-  const releases = await response.json();
-  const latestWithDesktopAssets = releases.map(normaliseRelease).find(Boolean);
+  const latestWithDesktopAssets = normaliseRelease(await response.json());
 
   if (!latestWithDesktopAssets) {
     throw new Error("No downloadable desktop release found.");
@@ -107,8 +110,12 @@ async function loadReleaseDetails() {
     const latestRelease = await fetchLatestFromGitHub();
     applyRelease(latestRelease);
   } catch {
-    versionLabel.textContent = "Latest download details are on GitHub Releases.";
-    releaseLink.href = fallbackReleaseUrl;
+    if (versionLabel) {
+      versionLabel.textContent = "Latest download details are on GitHub Releases.";
+    }
+    if (releaseLink) {
+      releaseLink.href = fallbackReleaseUrl;
+    }
     downloadButtons.mac.href = fallbackReleaseUrl;
     downloadButtons.windows.href = fallbackReleaseUrl;
   }

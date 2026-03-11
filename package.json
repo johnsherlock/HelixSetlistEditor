@@ -9,6 +9,7 @@
     "build:web": "vite build",
     "dev:web": "vite",
     "preview:web": "vite preview",
+    "site:serve": "python3 -m http.server 8000",
     "release:check": "node scripts/assert-version-sync.mjs",
     "release:prepare": "node scripts/release-prepare.mjs",
     "release:publish": "node scripts/release-publish.mjs",
