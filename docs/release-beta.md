@@ -56,9 +56,11 @@ npm run release:publish -- 0.1.3
    - the updater `.app.tar.gz` and `.sig`
    - `latest.json`
 
-## Unsigned beta install note
+## macOS beta install note
 
-This app is currently unsigned and not notarized.
+The macOS app is ad-hoc signed, but not notarized.
+
+That should make Gatekeeper treat the download as an unidentified developer app instead of a damaged one, but users may still need to approve first launch.
 
 Users installing directly from the `.dmg` may need to:
 

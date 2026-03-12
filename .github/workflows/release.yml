@@ -42,8 +42,17 @@ jobs:
         run: cargo test
         working-directory: src-tauri
 
-      - name: Build signed macOS release
+      - name: Build ad-hoc signed macOS release
         run: npm run tauri:build
+
+      - name: Verify macOS app signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_PATH="$(find src-tauri/target/release/bundle -name '*.app' | head -n 1)"
+          test -n "$APP_PATH"
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+          codesign --display --verbose=2 "$APP_PATH"
 
       - name: Prepare updater metadata
         id: assets

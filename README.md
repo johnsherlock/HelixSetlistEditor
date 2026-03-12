@@ -16,7 +16,7 @@ This repo is set up for public beta distribution through:
 - GitHub Releases: direct `.dmg` download
 - GitHub Releases: direct `.msi` download for Windows
 
-The beta is currently **unsigned** and **not notarized**. On first launch, macOS may block it. If that happens:
+The macOS beta is **ad-hoc signed** but **not notarized**. That should present as an "unidentified developer" warning instead of "damaged", but macOS may still block first launch. If that happens:
 
 1. open Finder
 2. right-click `Helix Setlist Editor.app`
