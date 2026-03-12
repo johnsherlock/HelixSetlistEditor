@@ -26,6 +26,7 @@ import {
   saveAppSettings,
   saveSetlist,
   saveSetlistAs,
+  openExternalUrl,
 } from "./api";
 import type { AppSettings, LibraryEntry, RuntimeInfo, SetlistDraft } from "./types";
 import { checkForAppUpdate, getCurrentAppVersion, installAppUpdate, type AvailableAppUpdate } from "./updater";
@@ -45,6 +46,11 @@ type PendingReplace = {
   };
 } | null;
 type PendingDeleteSetlist = LibraryEntry | null;
+
+type UpdateInstallFailure = {
+  version: string;
+  downloadUrl: string;
+};
 
 type DragSource =
   | { kind: "library-preset"; absolutePath: string }
@@ -255,6 +261,7 @@ export function App() {
   const [installingUpdate, setInstallingUpdate] = useState(false);
   const [updateStatusMessage, setUpdateStatusMessage] = useState<string | null>(null);
   const [updateCheckResult, setUpdateCheckResult] = useState<string | null>(null);
+  const [updateInstallFailure, setUpdateInstallFailure] = useState<UpdateInstallFailure | null>(null);
   const [dragSource, setDragSource] = useState<DragSource>(null);
   const [activeDropTarget, setActiveDropTarget] = useState<DropTarget>(null);
   const [dragPointer, setDragPointer] = useState<DragPointerState>(null);
@@ -559,6 +566,7 @@ export function App() {
       setErrorMessage(null);
       setUpdateStatusMessage(null);
       setUpdateCheckResult(null);
+      setUpdateInstallFailure(null);
 
       const [nextUpdate, currentVersion] = await Promise.all([checkForAppUpdate(), getCurrentAppVersion()]);
 
@@ -1285,6 +1293,18 @@ export function App() {
     setUpdateCheckResult(null);
   }
 
+  async function handleOpenManualUpdateDownload(): Promise<void> {
+    if (!updateInstallFailure) {
+      return;
+    }
+
+    try {
+      await openExternalUrl(updateInstallFailure.downloadUrl);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to open the manual update download.");
+    }
+  }
+
   async function handleInstallUpdate(): Promise<void> {
     if (!availableUpdate) {
       return;
@@ -1293,6 +1313,7 @@ export function App() {
     setInstallingUpdate(true);
     setUpdateStatusMessage("Downloading update...");
     setErrorMessage(null);
+    setUpdateInstallFailure(null);
 
     try {
       await installAppUpdate(availableUpdate, (event) => {
@@ -1309,7 +1330,10 @@ export function App() {
         setUpdateStatusMessage("Installing update...");
       });
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Failed to install the available update.");
+      setUpdateInstallFailure({
+        version: availableUpdate.version,
+        downloadUrl: `https://github.com/johnsherlock/HelixSetlistEditor/releases/tag/v${availableUpdate.version}`,
+      });
       setInstallingUpdate(false);
       setUpdateStatusMessage(null);
     }
@@ -1479,6 +1503,14 @@ export function App() {
         </header>
 
         {errorMessage ? <div className="error-banner">{errorMessage}</div> : null}
+        {updateInstallFailure ? (
+          <div className="error-banner">
+            {`Failed to install the available update to version ${updateInstallFailure.version}. `}
+            <button className="error-link-button" type="button" onClick={() => void handleOpenManualUpdateDownload()}>
+              Click here to download the latest version and install it manually.
+            </button>
+          </div>
+        ) : null}
 
         <section className="editor-panel" data-tour="setlist-editor">
           <div className="title-row">

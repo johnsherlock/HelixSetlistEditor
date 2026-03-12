@@ -579,6 +579,22 @@ input {
   color: #ffd7d1;
 }
 
+.error-link-button {
+  appearance: none;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.error-link-button:hover {
+  opacity: 0.9;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;

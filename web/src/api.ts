@@ -185,6 +185,10 @@ export async function getRuntimeInfo(): Promise<RuntimeInfo> {
   return invokeCommand<RuntimeInfo>("get_runtime_info");
 }
 
+export async function openExternalUrl(url: string): Promise<void> {
+  await invokeCommand<void>("open_external_url", { url });
+}
+
 export async function loadBlankTemplate(): Promise<SetlistDraft> {
   const fileText = await invokeCommand<string>("load_blank_template");
   const decoded = decodeHlsFile<Record<string, unknown>>(fileText);

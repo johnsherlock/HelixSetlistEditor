@@ -314,6 +314,51 @@ fn get_runtime_info() -> RuntimeInfo {
 }
 
 #[tauri::command]
+fn open_external_url(url: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let status = Command::new("open")
+            .arg(&url)
+            .status()
+            .map_err(|error| error.to_string())?;
+
+        return if status.success() {
+            Ok(())
+        } else {
+            Err(format!("Failed to open URL: {}", url))
+        };
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let status = Command::new("cmd")
+            .args(["/C", "start", "", &url])
+            .status()
+            .map_err(|error| error.to_string())?;
+
+        return if status.success() {
+            Ok(())
+        } else {
+            Err(format!("Failed to open URL: {}", url))
+        };
+    }
+
+    #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
+    {
+        let status = Command::new("xdg-open")
+            .arg(&url)
+            .status()
+            .map_err(|error| error.to_string())?;
+
+        return if status.success() {
+            Ok(())
+        } else {
+            Err(format!("Failed to open URL: {}", url))
+        };
+    }
+}
+
+#[tauri::command]
 fn load_blank_template(app_handle: tauri::AppHandle) -> Result<String, String> {
     let resource_path = app_handle
         .path()
@@ -371,7 +416,8 @@ pub fn run() {
             write_text_file,
             move_file_to_trash,
             load_blank_template,
-            get_runtime_info
+            get_runtime_info,
+            open_external_url
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

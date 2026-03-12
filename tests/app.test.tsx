@@ -15,6 +15,7 @@ const apiMocks = vi.hoisted(() => ({
   loadSetlist: vi.fn(),
   pickPresetDirectory: vi.fn(),
   pickSetlistDirectory: vi.fn(),
+  openExternalUrl: vi.fn(),
   resetAppSettings: vi.fn(),
   saveAppSettings: vi.fn(),
   saveSetlist: vi.fn(),
@@ -190,6 +191,7 @@ describe("App desktop flows", () => {
     apiMocks.deleteSetlist.mockResolvedValue(undefined);
     apiMocks.pickSetlistDirectory.mockResolvedValue(null);
     apiMocks.pickPresetDirectory.mockResolvedValue(null);
+    apiMocks.openExternalUrl.mockResolvedValue(undefined);
     apiMocks.resetAppSettings.mockResolvedValue(undefined);
     apiMocks.listSetlists.mockResolvedValue([]);
     apiMocks.listPresets.mockResolvedValue([]);
@@ -297,6 +299,37 @@ describe("App desktop flows", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "OK" }));
     await waitFor(() => expect(screen.queryByText("Check for updates")).toBeNull());
+  });
+
+  it("shows a manual download action when update installation fails", async () => {
+    apiMocks.loadAppSettings.mockResolvedValue({ hideWelcomeMessage: true });
+    updaterMocks.checkForAppUpdate.mockResolvedValue({
+      currentVersion: "0.1.0",
+      version: "0.1.1",
+      body: "Bug fixes",
+    });
+    updaterMocks.installAppUpdate.mockRejectedValue(new Error("install failed"));
+
+    render(<App />);
+
+    expect(await screen.findByText("Update available")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Install update" }));
+
+    expect(
+      await screen.findByText("Failed to install the available update to version 0.1.1.", { exact: false }),
+    ).toBeTruthy();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Click here to download the latest version and install it manually.",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(apiMocks.openExternalUrl).toHaveBeenCalledWith(
+        "https://github.com/johnsherlock/HelixSetlistEditor/releases/tag/v0.1.1",
+      ),
+    );
   });
 
   it("starts the guided intro by default and persists the opt-out on completion", async () => {
