@@ -3,10 +3,10 @@
   "releaseUrl": "https://github.com/johnsherlock/HelixSetlistEditor/releases/tag/v0.1.8",
   "mac": {
     "label": "Download for macOS",
-    "url": "https://github.com/johnsherlock/HelixSetlistEditor/releases/download/v0.1.8/Helix%20Setlist%20Editor_0.1.8_aarch64.dmg"
+    "url": "https://github.com/johnsherlock/HelixSetlistEditor/releases/download/v0.1.8/Helix.Setlist.Editor_0.1.8_aarch64.dmg"
   },
   "windows": {
     "label": "Download for Windows",
-    "url": "https://github.com/johnsherlock/HelixSetlistEditor/releases/download/v0.1.8/Helix%20Setlist%20Editor_0.1.8_x64_en-US.msi"
+    "url": "https://github.com/johnsherlock/HelixSetlistEditor/releases/download/v0.1.8/Helix.Setlist.Editor_0.1.8_x64_en-US.msi"
   }
 }

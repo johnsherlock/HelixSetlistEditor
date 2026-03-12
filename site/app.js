@@ -6,6 +6,10 @@ const downloadButtons = {
 };
 const versionLabel = document.querySelector("[data-version-label]");
 const releaseLink = document.querySelector("[data-release-link]");
+const macDownloadModal = document.querySelector("[data-download-modal]");
+const macDownloadContinue = document.querySelector("[data-mac-download-continue]");
+const macDownloadLabel = "Download for macOS";
+const macContinueLabel = "Continue to macOS download";
 
 function setDisabled(button, label) {
   if (!button) {
@@ -27,9 +31,21 @@ function applyRelease(data) {
   }
 
   if (data.mac?.url) {
+    downloadButtons.mac.classList.remove("is-disabled");
     downloadButtons.mac.href = data.mac.url;
+    downloadButtons.mac.textContent = macDownloadLabel;
+    if (macDownloadContinue) {
+      macDownloadContinue.classList.remove("is-disabled");
+      macDownloadContinue.href = data.mac.url;
+      macDownloadContinue.textContent = macContinueLabel;
+    }
   } else {
     setDisabled(downloadButtons.mac, "macOS build unavailable");
+    if (macDownloadContinue) {
+      macDownloadContinue.removeAttribute("href");
+      macDownloadContinue.classList.add("is-disabled");
+      macDownloadContinue.textContent = "macOS build unavailable";
+    }
   }
 
   if (data.windows?.url) {
@@ -118,7 +134,33 @@ async function loadReleaseDetails() {
     }
     downloadButtons.mac.href = fallbackReleaseUrl;
     downloadButtons.windows.href = fallbackReleaseUrl;
+    if (macDownloadContinue) {
+      macDownloadContinue.href = fallbackReleaseUrl;
+    }
   }
 }
+
+function openMacDownloadModal(event) {
+  if (!downloadButtons.mac || downloadButtons.mac.classList.contains("is-disabled")) {
+    return;
+  }
+
+  event.preventDefault();
+
+  if (macDownloadContinue && downloadButtons.mac.href) {
+    macDownloadContinue.href = downloadButtons.mac.href;
+  }
+
+  if (typeof macDownloadModal?.showModal === "function") {
+    if (!macDownloadModal.open) {
+      macDownloadModal.showModal();
+    }
+    return;
+  }
+
+  window.location.href = downloadButtons.mac.href;
+}
+
+downloadButtons.mac?.addEventListener("click", openMacDownloadModal);
 
 void loadReleaseDetails();

@@ -8,47 +8,86 @@
       name="description"
       content="Offline desktop editor for creating, organizing, and exporting Line 6 Helix setlists outside HX Edit."
     />
+    <link rel="icon" type="image/svg+xml" href="./assets/app-preview.svg" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <div class="site-shell">
+      <div class="page-orb page-orb-left" aria-hidden="true"></div>
+      <div class="page-orb page-orb-right" aria-hidden="true"></div>
       <header class="hero">
-        <div class="hero-copy">
-          <p class="eyebrow">Desktop Editor for Line 6 Helix Setlists</p>
-          <h1>Build and manage Helix setlists without HX Edit</h1>
-          <p class="hero-text">
-            Helix Setlist Editor is a free desktop app for assembling `.hls` setlists files,
-            allowing you to quickly and easily create clean and organised setlists for import into your Helix device.
-          </p>
-          <div class="visual-frame">
-            <img src="./assets/HelixSelistEditorScreenshot.png" alt="Helix Setlist Editor Screenshot" />
+        <div class="hero-grid">
+          <div class="hero-copy">
+            <p class="eyebrow">Desktop Editor for Line 6 Helix Setlists</p>
+            <h1>Build and manage Helix setlists offline</h1>
+            <p class="hero-text">
+              Helix Setlist Editor is a free desktop app for assembling `.hls` setlists files outside of HX Edit. 
+              With a focus on speed and ease of use, the app provides a streamlined workflow for organising your presets 
+              into clean and organised setlists for import into your Helix device.
+            </p>
+            <div class="hero-highlights" aria-label="Product highlights">
+              <span>Offline desktop workflow</span>
+              <span>macOS and Windows releases</span>
+              <span>Import-ready `.hls` export</span>
+            </div>
           </div>
-          <div class="cta-group">
-            <a class="button button-primary" data-download="mac" href="https://github.com/johnsherlock/HelixSetlistEditor/releases">Download for Mac</a>
-            <a class="button button-secondary" data-download="windows" href="https://github.com/johnsherlock/HelixSetlistEditor/releases">Download for Windows</a>
+
+          <div class="hero-visual" aria-label="Application preview">
+            <div class="visual-frame">
+              <img
+                src="./assets/HelixSelistEditorScreenshot.png"
+                alt="Helix Setlist Editor Screenshot"
+              />
+            </div>
           </div>
-          <p class="release-meta">
-            <span data-version-label>Loading latest release…</span>
-            <a data-release-link href="https://github.com/johnsherlock/HelixSetlistEditor/releases">View all releases</a>
-          </p>
-          <p class="install-note">
-            <b>Note:</b> Mac builds are currently unsigned beta releases. If Gatekeeper blocks the app or alerts that it is 'damaged' you will need to run the following command to remove it from quarantine.
-            <pre class="command-line">sudo xattr -rd com.apple.quarantine /Applications/Helix\ Setlist\ Editor.app</pre>
-          </p>
+
+          <section class="download-panel" aria-label="Download Helix Setlist Editor">
+            <div class="download-panel-copy">
+              <p class="download-label">Download the latest release</p>
+              <p class="download-heading">
+                Get the desktop app and start assembling Helix-ready setlists in minutes.
+              </p>
+              <p class="release-meta">
+                <span data-version-label>Loading latest release…</span>
+                <a
+                  data-release-link
+                  href="https://github.com/johnsherlock/HelixSetlistEditor/releases"
+                  >View all releases</a
+                >
+              </p>
+            </div>
+            <div class="cta-group">
+              <a
+                class="button button-primary"
+                data-download="mac"
+                href="https://github.com/johnsherlock/HelixSetlistEditor/releases"
+                >Download for macOS</a
+              >
+              <a
+                class="button button-secondary"
+                data-download="windows"
+                href="https://github.com/johnsherlock/HelixSetlistEditor/releases"
+                >Download for Windows</a
+              >
+            </div>
+          </section>
         </div>
       </header>
 
-      <main>
+      <main class="main-content">
         <section class="feature-strip" aria-label="Core capabilities">
-          <article>
+          <article class="feature-card">
+            <p class="feature-index">01</p>
             <h2>Organise presets fast</h2>
             <p>Drag presets into place and reorder the setlet quickly and easily. Filter and search through your presets with ease.</p>
           </article>
-          <article>
+          <article class="feature-card">
+            <p class="feature-index">02</p>
             <h2>Nested Directory Support</h2>
             <p>Supports nested directory structures for both presets and setlists allowing you to keep your presets orgainsed on disk and easy to find in the editor.</p>
           </article>
-          <article>
+          <article class="feature-card">
+            <p class="feature-index">03</p>
             <h2>Export Helix-ready files</h2>
             <p>The app exports valid `.hls` setlists files which can be easily imported into your Helix device via HX Edit.</p>
           </article>
@@ -86,6 +125,43 @@
         </div>
       </footer>
     </div>
+
+    <dialog class="download-modal" data-download-modal aria-labelledby="mac-download-title">
+      <form method="dialog" class="download-modal-shell">
+        <button class="modal-close" type="submit" aria-label="Close download instructions">
+          Close
+        </button>
+      </form>
+      <div class="download-modal-content">
+        <p class="download-modal-label">macOS install steps</p>
+        <h2 id="mac-download-title">MacOS installation steps</h2>
+        <p>The macOS build is currently an unsigned beta that requires a few extra steps to install:</p>
+        <ul class="download-steps">
+          <li>
+            Download the macOS beta app, open the `.dmg`, and move Helix Setlist Editor
+            into your `Applications` folder.
+          </li>
+          <li>
+            If macOS warns that the app is from an unidentified developer, right-click the
+            app and choose "Open", or use the "Open Anyway" option in Privacy &amp; Security. 
+            This can also be permitted under System Settings → Privacy &amp; Security.
+          </li>
+          <li>
+            If macOS says the app is "damaged", remove quarantine in Terminal using the following command:
+            <pre class="command-line">xattr -rd com.apple.quarantine /Applications/Helix\ Setlist\ Editor.app</pre>
+          </li>
+        </ul>
+        
+        <div class="download-modal-actions">
+          <a
+            class="button button-primary"
+            data-mac-download-continue
+            href="https://github.com/johnsherlock/HelixSetlistEditor/releases"
+            >Continue to macOS download</a
+          >
+        </div>
+      </div>
+    </dialog>
 
     <script type="module" src="./app.js"></script>
   </body>

@@ -1,4 +1,5 @@
 import { writeFileSync } from "node:fs";
+import { encodeGitHubReleaseAssetUrlPath } from "./github-release-assets.mjs";
 
 function parseArgs(argv) {
   const args = {};
@@ -18,10 +19,7 @@ function parseArgs(argv) {
 }
 
 function encodeAssetUrl(repo, tag, fileName) {
-  return `https://github.com/${repo}/releases/download/${encodeURIComponent(tag)}/${fileName
-    .split("/")
-    .map((segment) => encodeURIComponent(segment))
-    .join("/")}`;
+  return `https://github.com/${repo}/releases/download/${encodeURIComponent(tag)}/${encodeGitHubReleaseAssetUrlPath(fileName)}`;
 }
 
 const args = parseArgs(process.argv);

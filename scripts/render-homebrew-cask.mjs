@@ -1,4 +1,5 @@
 import { writeFileSync } from "node:fs";
+import { normalizeGitHubReleaseAssetName } from "./github-release-assets.mjs";
 
 function parseArgs(argv) {
   const args = {};
@@ -26,11 +27,13 @@ for (const key of required) {
   }
 }
 
+const artifactName = normalizeGitHubReleaseAssetName(args["artifact-name"]);
+
 const cask = `cask "helix-setlist-editor" do
   version "${args.version}"
   sha256 "${args.sha256}"
 
-  url "https://github.com/${args.repo}/releases/download/v#{version}/${args["artifact-name"]}",
+  url "https://github.com/${args.repo}/releases/download/v#{version}/${artifactName}",
       verified: "github.com/${args.repo}/"
   name "Helix Setlist Editor"
   desc "Desktop editor for Line 6 Helix .hls setlists"

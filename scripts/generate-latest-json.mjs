@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { basename } from "node:path";
+import { encodeGitHubReleaseAssetUrlPath } from "./github-release-assets.mjs";
 
 function parseArgs(argv) {
   const args = {};
@@ -30,7 +31,6 @@ for (const key of required) {
 const signature = readFileSync(args["signature-file"], "utf8").trim();
 const notes = args["notes-file"] ? readFileSync(args["notes-file"], "utf8").trim() : `Helix Setlist Editor ${args.version}`;
 const artifactName = basename(args.artifact);
-const encodedArtifactName = encodeURIComponent(artifactName);
 
 const payload = {
   version: args.version,
@@ -39,7 +39,7 @@ const payload = {
   platforms: {
     [args["platform-key"]]: {
       signature,
-      url: `https://github.com/${args.repo}/releases/download/${args.tag}/${encodedArtifactName}`,
+      url: `https://github.com/${args.repo}/releases/download/${args.tag}/${encodeGitHubReleaseAssetUrlPath(artifactName)}`,
     },
   },
 };

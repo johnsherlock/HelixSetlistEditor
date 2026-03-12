@@ -22,3 +22,6 @@ Thumbs.db
 
 # Design working files
 *.psd
+
+# playwright test artifacts
+.playwright-cli 
