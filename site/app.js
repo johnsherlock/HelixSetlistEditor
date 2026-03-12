@@ -8,8 +8,30 @@ const versionLabel = document.querySelector("[data-version-label]");
 const releaseLink = document.querySelector("[data-release-link]");
 const macDownloadModal = document.querySelector("[data-download-modal]");
 const macDownloadContinue = document.querySelector("[data-mac-download-continue]");
+const screenshotOpenButton = document.querySelector("[data-screenshot-open]");
+const imageModal = document.querySelector("[data-image-modal]");
+const copyCommandBlock = document.querySelector("[data-copy-command]");
+const copyCommandButton = document.querySelector("[data-copy-command-button]");
 const macDownloadLabel = "Download for macOS";
 const macContinueLabel = "Continue to macOS download";
+const copyCommandDefaultLabel = "Copy command";
+
+async function copyText(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const helper = document.createElement("textarea");
+  helper.value = text;
+  helper.setAttribute("readonly", "");
+  helper.style.position = "absolute";
+  helper.style.left = "-9999px";
+  document.body.append(helper);
+  helper.select();
+  document.execCommand("copy");
+  helper.remove();
+}
 
 function setDisabled(button, label) {
   if (!button) {
@@ -161,6 +183,38 @@ function openMacDownloadModal(event) {
   window.location.href = downloadButtons.mac.href;
 }
 
+function openImageModal() {
+  if (typeof imageModal?.showModal === "function") {
+    if (!imageModal.open) {
+      imageModal.showModal();
+    }
+  }
+}
+
+async function handleCopyCommand() {
+  if (!copyCommandBlock || !copyCommandButton) {
+    return;
+  }
+
+  const command = copyCommandBlock.textContent?.trim();
+  if (!command) {
+    return;
+  }
+
+  try {
+    await copyText(command);
+    copyCommandButton.textContent = "Copied";
+  } catch {
+    copyCommandButton.textContent = "Copy failed";
+  }
+
+  window.setTimeout(() => {
+    copyCommandButton.textContent = copyCommandDefaultLabel;
+  }, 1600);
+}
+
 downloadButtons.mac?.addEventListener("click", openMacDownloadModal);
+screenshotOpenButton?.addEventListener("click", openImageModal);
+copyCommandButton?.addEventListener("click", handleCopyCommand);
 
 void loadReleaseDetails();
