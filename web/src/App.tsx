@@ -1575,7 +1575,7 @@ export function App() {
         </div>
       ) : null}
 
-      {(availableUpdate || updateCheckResult) && !guideActive ? (
+      {(availableUpdate || updateCheckResult) && settingsLoaded && !guidePending && !guideActive ? (
         <div className="modal-backdrop">
           <div className="modal-card">
             <h3>{availableUpdate ? "Update available" : "Check for updates"}</h3>
