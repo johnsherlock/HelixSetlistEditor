@@ -627,11 +627,11 @@ h1 {
 }
 
 .carousel-nav-prev {
-  left: 20px;
+  left: -88px;
 }
 
 .carousel-nav-next {
-  right: 20px;
+  right: -88px;
 }
 
 .carousel-nav span {
@@ -962,11 +962,11 @@ h1 {
   }
 
   .carousel-nav-prev {
-    left: 12px;
+    left: -28px;
   }
 
   .carousel-nav-next {
-    right: 12px;
+    right: -28px;
   }
 
   .site-footer {
