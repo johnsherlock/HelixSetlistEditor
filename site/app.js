@@ -304,6 +304,14 @@ function updateCarousel(stepIndex) {
 
   carouselImage.src = step.src;
   carouselImage.alt = step.alt;
+
+  if (carouselPrevButton) {
+    carouselPrevButton.hidden = currentDemoStepIndex === 0;
+  }
+
+  if (carouselNextButton) {
+    carouselNextButton.hidden = currentDemoStepIndex === demoSteps.length - 1;
+  }
 }
 
 function moveCarousel(direction) {
