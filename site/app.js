@@ -105,6 +105,39 @@ function normaliseRelease(release) {
   };
 }
 
+function compareVersions(left, right) {
+  const leftParts = String(left ?? "")
+    .split(".")
+    .map((part) => Number.parseInt(part, 10) || 0);
+  const rightParts = String(right ?? "")
+    .split(".")
+    .map((part) => Number.parseInt(part, 10) || 0);
+  const maxLength = Math.max(leftParts.length, rightParts.length);
+
+  for (let index = 0; index < maxLength; index += 1) {
+    const leftPart = leftParts[index] ?? 0;
+    const rightPart = rightParts[index] ?? 0;
+
+    if (leftPart > rightPart) {
+      return 1;
+    }
+
+    if (leftPart < rightPart) {
+      return -1;
+    }
+  }
+
+  return 0;
+}
+
+function choosePreferredRelease(manifest, latestRelease) {
+  if (manifest && latestRelease) {
+    return compareVersions(latestRelease.version, manifest.version) > 0 ? latestRelease : manifest;
+  }
+
+  return latestRelease ?? manifest ?? null;
+}
+
 async function fetchManifest() {
   const response = await fetch("./downloads.json", { cache: "no-store" });
   if (!response.ok) {
@@ -134,20 +167,32 @@ async function fetchLatestFromGitHub() {
 }
 
 async function loadReleaseDetails() {
+  let manifest = null;
+  let latestRelease = null;
+
   try {
-    const manifest = await fetchManifest();
-    if (manifest?.version && (manifest.mac?.url || manifest.windows?.url)) {
-      applyRelease(manifest);
-      return;
-    }
+    manifest = await fetchManifest();
   } catch {
     // fall through to GitHub API
   }
 
   try {
-    const latestRelease = await fetchLatestFromGitHub();
-    applyRelease(latestRelease);
+    latestRelease = await fetchLatestFromGitHub();
   } catch {
+    // fall back to manifest if available
+  }
+
+  const preferredRelease = choosePreferredRelease(
+    manifest?.version && (manifest.mac?.url || manifest.windows?.url) ? manifest : null,
+    latestRelease,
+  );
+
+  if (preferredRelease) {
+    applyRelease(preferredRelease);
+    return;
+  }
+
+  {
     if (versionLabel) {
       versionLabel.textContent = "Latest download details are on GitHub Releases.";
     }
