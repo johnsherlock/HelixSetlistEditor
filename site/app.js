@@ -12,6 +12,9 @@ const macDownloadIntel = document.querySelector("[data-mac-download-intel]");
 const macDownloadArchCopy = document.querySelector("[data-mac-download-arch-copy]");
 const screenshotOpenButton = document.querySelector("[data-screenshot-open]");
 const imageModal = document.querySelector("[data-image-modal]");
+const carouselImage = document.querySelector("[data-carousel-image]");
+const carouselPrevButton = document.querySelector("[data-carousel-prev]");
+const carouselNextButton = document.querySelector("[data-carousel-next]");
 const copyCommandBlock = document.querySelector("[data-copy-command]");
 const copyCommandButton = document.querySelector("[data-copy-command-button]");
 const macDownloadLabel = "Download for macOS";
@@ -19,6 +22,16 @@ const macContinueLabel = "Continue to macOS download";
 const macAppleSiliconLabel = "Download for Apple Silicon";
 const macIntelLabel = "Download for Intel Mac";
 const copyCommandDefaultLabel = "Copy command";
+const demoSteps = [
+  { src: "./assets/Step1.png", alt: "Step 1 of the Helix Setlist Editor demo" },
+  { src: "./assets/Step2.png", alt: "Step 2 of the Helix Setlist Editor demo" },
+  { src: "./assets/Step3.png", alt: "Step 3 of the Helix Setlist Editor demo" },
+  { src: "./assets/Step4.png", alt: "Step 4 of the Helix Setlist Editor demo" },
+  { src: "./assets/Step5.png", alt: "Step 5 of the Helix Setlist Editor demo" },
+  { src: "./assets/Step6.png", alt: "Step 6 of the Helix Setlist Editor demo" },
+  { src: "./assets/Step7.png", alt: "Step 7 of the Helix Setlist Editor demo" },
+];
+let currentDemoStepIndex = 0;
 
 async function copyText(text) {
   if (navigator.clipboard?.writeText) {
@@ -281,7 +294,53 @@ function openMacDownloadModal(event) {
   window.location.href = downloadButtons.mac.href;
 }
 
+function updateCarousel(stepIndex) {
+  if (!carouselImage || demoSteps.length === 0) {
+    return;
+  }
+
+  currentDemoStepIndex = (stepIndex + demoSteps.length) % demoSteps.length;
+  const step = demoSteps[currentDemoStepIndex];
+
+  carouselImage.src = step.src;
+  carouselImage.alt = step.alt;
+}
+
+function moveCarousel(direction) {
+  updateCarousel(currentDemoStepIndex + direction);
+}
+
+function handleCarouselPrevClick(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  moveCarousel(-1);
+}
+
+function handleCarouselNextClick(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  moveCarousel(1);
+}
+
+function handleImageModalKeydown(event) {
+  if (!imageModal?.open) {
+    return;
+  }
+
+  if (event.key === "ArrowLeft") {
+    event.preventDefault();
+    moveCarousel(-1);
+  }
+
+  if (event.key === "ArrowRight") {
+    event.preventDefault();
+    moveCarousel(1);
+  }
+}
+
 function openImageModal() {
+  updateCarousel(0);
+
   if (typeof imageModal?.showModal === "function") {
     if (!imageModal.open) {
       imageModal.showModal();
@@ -313,6 +372,9 @@ async function handleCopyCommand() {
 
 downloadButtons.mac?.addEventListener("click", openMacDownloadModal);
 screenshotOpenButton?.addEventListener("click", openImageModal);
+carouselPrevButton?.addEventListener("click", handleCarouselPrevClick);
+carouselNextButton?.addEventListener("click", handleCarouselNextClick);
+imageModal?.addEventListener("keydown", handleImageModalKeydown);
 copyCommandButton?.addEventListener("click", handleCopyCommand);
 
 void loadReleaseDetails();

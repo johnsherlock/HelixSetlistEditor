@@ -32,8 +32,9 @@
               class="visual-frame"
               type="button"
               data-screenshot-open
-              aria-label="Open full-size Helix Setlist Editor screenshot"
+              aria-label="Open Helix Setlist Editor demo carousel"
             >
+              <span class="visual-demo-tip" aria-hidden="true">Click for demo</span>
               <img
                 src="./assets/HelixSelistEditorScreenshot.png"
                 alt="Helix Setlist Editor Screenshot"
@@ -181,20 +182,50 @@
 
     <dialog class="image-modal" data-image-modal aria-labelledby="screenshot-modal-title">
       <form method="dialog" class="download-modal-shell">
-        <button class="modal-close" type="submit" aria-label="Close screenshot preview">
+        <button class="modal-close" type="submit" aria-label="Close demo carousel">
           Close
         </button>
       </form>
       <div class="image-modal-content">
-        <p class="download-modal-label">Full-size screenshot</p>
-        <h2 id="screenshot-modal-title">Helix Setlist Editor preview</h2>
-        <img
-          class="image-modal-preview"
-          src="./assets/HelixSelistEditorScreenshot.png"
-          alt="Full-size screenshot of Helix Setlist Editor"
-          width="1400"
-          height="870"
-        />
+        <div class="image-modal-header">
+          <div>
+            <p class="download-modal-label">Interactive walkthrough</p>
+            <h2 id="screenshot-modal-title">Helix Setlist Editor demo</h2>
+          </div>
+        </div>
+        <div
+          class="image-carousel"
+          role="group"
+          aria-roledescription="carousel"
+          aria-label="Helix Setlist Editor demo screenshots"
+        >
+          <div class="image-carousel-stage">
+            <button
+              class="carousel-nav carousel-nav-prev"
+              type="button"
+              data-carousel-prev
+              aria-label="Show previous demo step"
+            >
+              <span aria-hidden="true">&#x2039;</span>
+            </button>
+            <img
+              class="image-modal-preview"
+              data-carousel-image
+              src="./assets/Step1.png"
+              alt="Step 1 of the Helix Setlist Editor demo"
+              width="1400"
+              height="870"
+            />
+            <button
+              class="carousel-nav carousel-nav-next"
+              type="button"
+              data-carousel-next
+              aria-label="Show next demo step"
+            >
+              <span aria-hidden="true">&#x203A;</span>
+            </button>
+          </div>
+        </div>
       </div>
     </dialog>
 
