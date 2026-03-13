@@ -8,12 +8,16 @@ const versionLabel = document.querySelector("[data-version-label]");
 const releaseLink = document.querySelector("[data-release-link]");
 const macDownloadModal = document.querySelector("[data-download-modal]");
 const macDownloadContinue = document.querySelector("[data-mac-download-continue]");
+const macDownloadIntel = document.querySelector("[data-mac-download-intel]");
+const macDownloadArchCopy = document.querySelector("[data-mac-download-arch-copy]");
 const screenshotOpenButton = document.querySelector("[data-screenshot-open]");
 const imageModal = document.querySelector("[data-image-modal]");
 const copyCommandBlock = document.querySelector("[data-copy-command]");
 const copyCommandButton = document.querySelector("[data-copy-command-button]");
 const macDownloadLabel = "Download for macOS";
 const macContinueLabel = "Continue to macOS download";
+const macAppleSiliconLabel = "Download for Apple Silicon";
+const macIntelLabel = "Download for Intel Mac";
 const copyCommandDefaultLabel = "Copy command";
 
 async function copyText(text) {
@@ -45,6 +49,9 @@ function setDisabled(button, label) {
 
 function applyRelease(data) {
   const version = data.version ?? "Latest release";
+  const macAppleSilicon = data.macAppleSilicon ?? data.mac ?? null;
+  const macIntel = data.macIntel ?? null;
+
   if (versionLabel) {
     versionLabel.textContent = `Current version: ${version}`;
   }
@@ -52,14 +59,36 @@ function applyRelease(data) {
     releaseLink.href = data.releaseUrl ?? fallbackReleaseUrl;
   }
 
-  if (data.mac?.url) {
+  if (macAppleSilicon?.url || macIntel?.url) {
+    const primaryMacUrl = macAppleSilicon?.url ?? macIntel?.url;
     downloadButtons.mac.classList.remove("is-disabled");
-    downloadButtons.mac.href = data.mac.url;
+    downloadButtons.mac.href = primaryMacUrl;
     downloadButtons.mac.textContent = macDownloadLabel;
+
     if (macDownloadContinue) {
       macDownloadContinue.classList.remove("is-disabled");
-      macDownloadContinue.href = data.mac.url;
-      macDownloadContinue.textContent = macContinueLabel;
+      macDownloadContinue.href = primaryMacUrl;
+      macDownloadContinue.textContent =
+        macAppleSilicon?.url && macIntel?.url
+          ? macAppleSiliconLabel
+          : macContinueLabel;
+    }
+
+    if (macDownloadArchCopy) {
+      macDownloadArchCopy.hidden = !(macAppleSilicon?.url && macIntel?.url);
+    }
+
+    if (macDownloadIntel) {
+      if (macAppleSilicon?.url && macIntel?.url) {
+        macDownloadIntel.hidden = false;
+        macDownloadIntel.classList.remove("is-disabled");
+        macDownloadIntel.href = macIntel.url;
+        macDownloadIntel.textContent = macIntelLabel;
+      } else {
+        macDownloadIntel.hidden = true;
+        macDownloadIntel.removeAttribute("href");
+        macDownloadIntel.classList.add("is-disabled");
+      }
     }
   } else {
     setDisabled(downloadButtons.mac, "macOS build unavailable");
@@ -67,6 +96,14 @@ function applyRelease(data) {
       macDownloadContinue.removeAttribute("href");
       macDownloadContinue.classList.add("is-disabled");
       macDownloadContinue.textContent = "macOS build unavailable";
+    }
+    if (macDownloadIntel) {
+      macDownloadIntel.hidden = true;
+      macDownloadIntel.removeAttribute("href");
+      macDownloadIntel.classList.add("is-disabled");
+    }
+    if (macDownloadArchCopy) {
+      macDownloadArchCopy.hidden = true;
     }
   }
 
@@ -82,7 +119,13 @@ function normaliseRelease(release) {
     return null;
   }
 
-  const macAsset = release.assets.find((asset) => asset.name.endsWith(".dmg"));
+  const macAssets = release.assets.filter((asset) => asset.name.endsWith(".dmg"));
+  const macAppleSiliconAsset = macAssets.find((asset) => /(aarch64|arm64)/i.test(asset.name));
+  const macIntelAsset = macAssets.find((asset) => /(x86_64|x64|intel)/i.test(asset.name));
+  const genericMacAsset = macAssets.find(
+    (asset) => !/(aarch64|arm64|x86_64|x64|intel)/i.test(asset.name),
+  );
+  const macAsset = macAppleSiliconAsset ?? macIntelAsset ?? genericMacAsset ?? null;
   const windowsAsset = release.assets.find((asset) => asset.name.endsWith(".msi"));
 
   if (!macAsset && !windowsAsset) {
@@ -95,6 +138,20 @@ function normaliseRelease(release) {
     mac: macAsset
       ? {
           url: macAsset.browser_download_url,
+        }
+      : null,
+    macAppleSilicon: macAppleSiliconAsset
+      ? {
+          url: macAppleSiliconAsset.browser_download_url,
+        }
+      : genericMacAsset
+        ? {
+            url: genericMacAsset.browser_download_url,
+          }
+        : null,
+    macIntel: macIntelAsset
+      ? {
+          url: macIntelAsset.browser_download_url,
         }
       : null,
     windows: windowsAsset
@@ -213,10 +270,6 @@ function openMacDownloadModal(event) {
   }
 
   event.preventDefault();
-
-  if (macDownloadContinue && downloadButtons.mac.href) {
-    macDownloadContinue.href = downloadButtons.mac.href;
-  }
 
   if (typeof macDownloadModal?.showModal === "function") {
     if (!macDownloadModal.open) {

@@ -14,7 +14,8 @@ jobs:
   release-macos-beta:
     runs-on: macos-14
     outputs:
-      dmg_asset_name: ${{ steps.assets.outputs.dmg_asset_name }}
+      apple_silicon_dmg_asset_name: ${{ steps.assets.outputs.apple_silicon_dmg_asset_name }}
+      intel_dmg_asset_name: ${{ steps.assets.outputs.intel_dmg_asset_name }}
     env:
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -30,6 +31,8 @@ jobs:
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
 
       - name: Install dependencies
         run: npm ci
@@ -44,17 +47,23 @@ jobs:
         run: cargo test
         working-directory: src-tauri
 
-      - name: Build ad-hoc signed macOS release
-        run: npm run tauri:build
+      - name: Build ad-hoc signed macOS Apple Silicon release
+        run: npm run tauri:build -- --target aarch64-apple-darwin
+
+      - name: Build ad-hoc signed macOS Intel release
+        run: npm run tauri:build -- --target x86_64-apple-darwin
 
       - name: Verify macOS app signature
         shell: bash
         run: |
           set -euo pipefail
-          APP_PATH="$(find src-tauri/target/release/bundle -name '*.app' | head -n 1)"
-          test -n "$APP_PATH"
-          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
-          codesign --display --verbose=2 "$APP_PATH"
+          for APP_PATH in \
+            "$(find src-tauri/target/aarch64-apple-darwin/release/bundle -name '*.app' | head -n 1)" \
+            "$(find src-tauri/target/x86_64-apple-darwin/release/bundle -name '*.app' | head -n 1)"; do
+            test -n "$APP_PATH"
+            codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+            codesign --display --verbose=2 "$APP_PATH"
+          done
 
       - name: Prepare updater metadata
         id: assets
@@ -64,35 +73,51 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           mkdir -p release
 
-          DMG_PATH="$(find src-tauri/target/release/bundle -name '*.dmg' | head -n 1)"
-          APP_TAR_PATH="$(find src-tauri/target/release/bundle -name '*.app.tar.gz' | head -n 1)"
-          SIG_PATH="$(find src-tauri/target/release/bundle -name '*.app.tar.gz.sig' | head -n 1)"
+          ARM_DMG_PATH="$(find src-tauri/target/aarch64-apple-darwin/release/bundle -name '*.dmg' | head -n 1)"
+          ARM_APP_TAR_PATH="$(find src-tauri/target/aarch64-apple-darwin/release/bundle -name '*.app.tar.gz' | head -n 1)"
+          ARM_SIG_PATH="$(find src-tauri/target/aarch64-apple-darwin/release/bundle -name '*.app.tar.gz.sig' | head -n 1)"
+          INTEL_DMG_PATH="$(find src-tauri/target/x86_64-apple-darwin/release/bundle -name '*.dmg' | head -n 1)"
+          INTEL_APP_TAR_PATH="$(find src-tauri/target/x86_64-apple-darwin/release/bundle -name '*.app.tar.gz' | head -n 1)"
+          INTEL_SIG_PATH="$(find src-tauri/target/x86_64-apple-darwin/release/bundle -name '*.app.tar.gz.sig' | head -n 1)"
 
-          test -n "$DMG_PATH"
-          test -n "$APP_TAR_PATH"
-          test -n "$SIG_PATH"
+          test -n "$ARM_DMG_PATH"
+          test -n "$ARM_APP_TAR_PATH"
+          test -n "$ARM_SIG_PATH"
+          test -n "$INTEL_DMG_PATH"
+          test -n "$INTEL_APP_TAR_PATH"
+          test -n "$INTEL_SIG_PATH"
 
           node scripts/generate-latest-json.mjs \
             --version "$VERSION" \
             --repo "$GITHUB_REPOSITORY" \
             --tag "$GITHUB_REF_NAME" \
             --platform-key "darwin-aarch64" \
-            --artifact "$APP_TAR_PATH" \
-            --signature-file "$SIG_PATH" \
+            --artifact "$ARM_APP_TAR_PATH" \
+            --signature-file "$ARM_SIG_PATH" \
+            --platform-key "darwin-x86_64" \
+            --artifact "$INTEL_APP_TAR_PATH" \
+            --signature-file "$INTEL_SIG_PATH" \
             --output "release/latest.json"
 
-          echo "dmg_path=$DMG_PATH" >> "$GITHUB_OUTPUT"
-          echo "app_tar_path=$APP_TAR_PATH" >> "$GITHUB_OUTPUT"
-          echo "sig_path=$SIG_PATH" >> "$GITHUB_OUTPUT"
-          echo "dmg_asset_name=$(basename "$DMG_PATH")" >> "$GITHUB_OUTPUT"
+          echo "apple_silicon_dmg_path=$ARM_DMG_PATH" >> "$GITHUB_OUTPUT"
+          echo "apple_silicon_app_tar_path=$ARM_APP_TAR_PATH" >> "$GITHUB_OUTPUT"
+          echo "apple_silicon_sig_path=$ARM_SIG_PATH" >> "$GITHUB_OUTPUT"
+          echo "apple_silicon_dmg_asset_name=$(basename "$ARM_DMG_PATH")" >> "$GITHUB_OUTPUT"
+          echo "intel_dmg_path=$INTEL_DMG_PATH" >> "$GITHUB_OUTPUT"
+          echo "intel_app_tar_path=$INTEL_APP_TAR_PATH" >> "$GITHUB_OUTPUT"
+          echo "intel_sig_path=$INTEL_SIG_PATH" >> "$GITHUB_OUTPUT"
+          echo "intel_dmg_asset_name=$(basename "$INTEL_DMG_PATH")" >> "$GITHUB_OUTPUT"
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            ${{ steps.assets.outputs.dmg_path }}
-            ${{ steps.assets.outputs.app_tar_path }}
-            ${{ steps.assets.outputs.sig_path }}
+            ${{ steps.assets.outputs.apple_silicon_dmg_path }}
+            ${{ steps.assets.outputs.apple_silicon_app_tar_path }}
+            ${{ steps.assets.outputs.apple_silicon_sig_path }}
+            ${{ steps.assets.outputs.intel_dmg_path }}
+            ${{ steps.assets.outputs.intel_app_tar_path }}
+            ${{ steps.assets.outputs.intel_sig_path }}
             release/latest.json
 
   release-windows-msi:
@@ -170,7 +195,8 @@ jobs:
             --version "$VERSION" \
             --repo "$GITHUB_REPOSITORY" \
             --tag "$GITHUB_REF_NAME" \
-            --mac-asset-name "${{ needs.release-macos-beta.outputs.dmg_asset_name }}" \
+            --mac-apple-silicon-asset-name "${{ needs.release-macos-beta.outputs.apple_silicon_dmg_asset_name }}" \
+            --mac-intel-asset-name "${{ needs.release-macos-beta.outputs.intel_dmg_asset_name }}" \
             --windows-asset-name "${{ needs.release-windows-msi.outputs.msi_asset_name }}" \
             --output site/downloads.json
 

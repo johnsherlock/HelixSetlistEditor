@@ -578,6 +578,12 @@ h1 {
   margin-top: 24px;
 }
 
+.download-arch-copy {
+  margin: 22px 0 0;
+  color: var(--muted-strong);
+  line-height: 1.7;
+}
+
 .modal-close {
   padding: 10px 14px;
   border: 0;
@@ -750,8 +756,9 @@ h1 {
 
   h1 {
     margin-top: 18px;
-    max-width: 8ch;
-    font-size: clamp(2.5rem, 13.5vw, 3.7rem);
+    max-width: 16ch;
+    font-size: clamp(2.15rem, 9.6vw, 2.95rem);
+    text-wrap: balance;
   }
 
   .hero-text {

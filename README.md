@@ -13,7 +13,8 @@ It can:
 
 This repo is set up for public beta distribution through:
 
-- GitHub Releases: direct `.dmg` download
+- GitHub Releases: direct `.dmg` download for Apple Silicon Macs
+- GitHub Releases: direct `.dmg` download for Intel Macs
 - GitHub Releases: direct `.msi` download for Windows
 
 The macOS beta is **ad-hoc signed** but **not notarized**. That should present as an "unidentified developer" warning instead of "damaged", but macOS may still block first launch. If that happens:
@@ -32,8 +33,9 @@ The desktop app checks for updates on launch in production builds.
 
 Updater artifacts are published alongside each GitHub Release:
 
-- `.dmg` for direct install
-- `.app.tar.gz` and `.sig` for the Tauri updater
+- `.dmg` for Apple Silicon direct install
+- `.dmg` for Intel direct install
+- `.app.tar.gz` and `.sig` pairs for the Tauri updater on both macOS architectures
 - `latest.json` for update discovery
 
 ## Website
@@ -68,7 +70,7 @@ The release workflow is in:
 
 - [.github/workflows/release.yml](/Users/john/Documents/Projects/HelixSetlistEditor/.github/workflows/release.yml)
 
-It runs only on tag pushes, builds the macOS and Windows releases, generates updater metadata for macOS, publishes release assets to GitHub Releases, and updates the website download manifest for GitHub Pages.
+It runs only on tag pushes, builds Apple Silicon and Intel macOS releases plus the Windows release, generates updater metadata for both macOS architectures, publishes release assets to GitHub Releases, and updates the website download manifest for GitHub Pages.
 
 Required GitHub secrets:
 
