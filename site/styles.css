@@ -638,6 +638,10 @@ h1 {
   transform: translateY(-1px);
 }
 
+.carousel-nav[hidden] {
+  display: none;
+}
+
 .download-modal-shell {
   display: flex;
   justify-content: flex-end;

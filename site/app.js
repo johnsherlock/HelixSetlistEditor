@@ -17,8 +17,8 @@ const carouselPrevButton = document.querySelector("[data-carousel-prev]");
 const carouselNextButton = document.querySelector("[data-carousel-next]");
 const copyCommandBlock = document.querySelector("[data-copy-command]");
 const copyCommandButton = document.querySelector("[data-copy-command-button]");
-const macDownloadLabel = "Download for macOS";
-const macContinueLabel = "Continue to macOS download";
+const macDownloadLabel = "Download for MacOS";
+const macContinueLabel = "Continue to MacOS download";
 const macAppleSiliconLabel = "Download for Apple Silicon";
 const macIntelLabel = "Download for Intel Mac";
 const copyCommandDefaultLabel = "Copy command";
@@ -104,11 +104,11 @@ function applyRelease(data) {
       }
     }
   } else {
-    setDisabled(downloadButtons.mac, "macOS build unavailable");
+    setDisabled(downloadButtons.mac, "MacOS build unavailable");
     if (macDownloadContinue) {
       macDownloadContinue.removeAttribute("href");
       macDownloadContinue.classList.add("is-disabled");
-      macDownloadContinue.textContent = "macOS build unavailable";
+      macDownloadContinue.textContent = "MacOS build unavailable";
     }
     if (macDownloadIntel) {
       macDownloadIntel.hidden = true;
@@ -306,11 +306,15 @@ function updateCarousel(stepIndex) {
   carouselImage.alt = step.alt;
 
   if (carouselPrevButton) {
-    carouselPrevButton.hidden = currentDemoStepIndex === 0;
+    const isFirstStep = currentDemoStepIndex === 0;
+    carouselPrevButton.hidden = isFirstStep;
+    carouselPrevButton.style.display = isFirstStep ? "none" : "inline-flex";
   }
 
   if (carouselNextButton) {
-    carouselNextButton.hidden = currentDemoStepIndex === demoSteps.length - 1;
+    const isLastStep = currentDemoStepIndex === demoSteps.length - 1;
+    carouselNextButton.hidden = isLastStep;
+    carouselNextButton.style.display = isLastStep ? "none" : "inline-flex";
   }
 }
 
